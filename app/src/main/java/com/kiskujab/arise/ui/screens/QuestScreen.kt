@@ -208,7 +208,7 @@ private fun Projection(t: DayView, awakenedDay: Long, state: PlayerState) {
         Finalizer.finalize(
             FinalizeInput(
                 epochDay = t.epochDay, values = t.record.values, baseGoals = t.baseGoals, penalty = t.penalty,
-                customs = t.customs, vacation = t.vacation, absent = t.record.isEmpty,
+                customs = t.customs, vacation = t.vacation, absent = t.record.isEmpty && !t.record.skipDay,
                 modifiers = t.record.modifiers.copy(newcomer = t.epochDay == awakenedDay),
                 nextDayBaseGoals = t.baseGoals, nextDayVacation = false, seed = 0,
             ),

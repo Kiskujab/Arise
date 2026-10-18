@@ -112,7 +112,7 @@ class GameRepository(private val db: AriseDatabase) {
             penalty = record.penaltyQuest,
             customs = customs,
             vacation = vacation,
-            absent = record.isEmpty,
+            absent = record.isEmpty && !record.skipDay,
             modifiers = record.modifiers.copy(newcomer = epochDay == p.awakenedEpochDay),
             nextDayBaseGoals = goalsFor(epochDay + 1),
             nextDayVacation = vacations.any { it.covers(epochDay + 1) },
