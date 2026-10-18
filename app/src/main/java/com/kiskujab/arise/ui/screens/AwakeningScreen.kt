@@ -172,7 +172,7 @@ private fun GoalsStep(goals: Goals, onChange: (Goals) -> Unit, onNext: () -> Uni
                 modifier = Modifier.fillMaxWidth(),
             )
             Spacer(Modifier.height(14.dp))
-            GoalsForm(goals, onChange)
+            GoalsForm(goals, onChange = onChange)
             Spacer(Modifier.height(18.dp))
             SystemButton("CONFIRM", onClick = onNext, modifier = Modifier.align(Alignment.CenterHorizontally))
         }
