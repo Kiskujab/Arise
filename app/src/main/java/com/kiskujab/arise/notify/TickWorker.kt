@@ -34,6 +34,15 @@ class TickWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
 
             // Fired early (e.g. rescheduled): don't notify, just re-arm.
             val early = target > 0 && System.currentTimeMillis() < target - 5 * 60_000
+            if (periodic) {
+                app.updates.checkInBackground()?.let { info ->
+                    Notifier.post(
+                        applicationContext, Notifier.ID_UPDATE, Notifier.CHANNEL_SYSTEM,
+                        "[SYSTEM] Update available: v${info.versionName}",
+                        "Open Arise to install it. Your records stay intact.",
+                    )
+                }
+            }
             if (!periodic && !early) notifyFor(slot, repo.let { DayView.load(it, LocalDate.now().toEpochDay()) }, player.lastFinalizedDay)
         } finally {
             if (!periodic) Scheduler.schedule(applicationContext, settings.notifications.value)

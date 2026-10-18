@@ -10,6 +10,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -23,6 +24,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -43,9 +45,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kiskujab.arise.R
 import com.kiskujab.arise.core.Goals
 import com.kiskujab.arise.ui.components.GlowText
 import com.kiskujab.arise.ui.components.GoalsForm
@@ -162,7 +166,7 @@ private fun GoalsStep(goals: Goals, onChange: (Goals) -> Unit, onNext: () -> Uni
     Column(Modifier.verticalScroll(rememberScrollState())) {
         SystemPanel(title = "SET YOUR TARGETS") {
             Text(
-                "These targets define your Daily Quest. Later changes only take effect from the next day.",
+                "These targets define your Daily Quest. Later you can give each weekday its own targets (e.g. fewer steps on Saturday) in SYSTEM → Targets. Changes take effect from the next day.",
                 style = AriseType.small,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
@@ -212,6 +216,11 @@ private fun AriseFinale(name: String, onDone: () -> Unit) {
         onDone()
     }
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Image(
+            painterResource(R.drawable.ic_launcher_foreground),
+            contentDescription = null,
+            modifier = Modifier.size(220.dp).scale(scale.value).alpha(alpha.value),
+        )
         GlowText("ARISE", AriseType.display.copy(fontSize = 72.sp, letterSpacing = 12.sp), modifier = Modifier.scale(scale.value).alpha(alpha.value))
         Spacer(Modifier.height(18.dp))
         Box(Modifier.border(1.dp, AriseColors.Blue.copy(alpha = alpha.value), RoundedCornerShape(3.dp)).padding(horizontal = 14.dp, vertical = 6.dp)) {

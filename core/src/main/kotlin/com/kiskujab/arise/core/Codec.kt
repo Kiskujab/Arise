@@ -29,6 +29,12 @@ object Codec {
     fun encodeGoals(g: Goals): String = json.encodeToString(Goals.serializer(), g)
     fun decodeGoals(s: String): Goals = json.decodeFromString(Goals.serializer(), s)
 
+    fun encodeWeek(w: WeekGoals): String = json.encodeToString(WeekGoals.serializer(), w)
+
+    /** Reads week goals; older records stored a single [Goals] used for every day. */
+    fun decodeWeek(s: String): WeekGoals =
+        if (s.contains("\"days\"")) json.decodeFromString(WeekGoals.serializer(), s) else WeekGoals.uniform(decodeGoals(s))
+
     fun encodeCustom(m: Map<Long, Double>): String = json.encodeToString(customMap, m)
     fun decodeCustom(s: String?): Map<Long, Double> =
         if (s.isNullOrBlank()) emptyMap() else json.decodeFromString(customMap, s)

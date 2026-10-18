@@ -41,7 +41,10 @@ jobs:
           name: Arise v1.0.${{ github.run_number }}
           target_commitish: ${{ github.sha }}
           body: |
+            ${{ github.event.head_commit.message }}
+
+            ---
             Built from `${{ github.ref_name }}` @ ${{ github.sha }}.
-            Download the APK below and open it on your phone to install or update.
+            Download the APK below and open it on your phone to install, or update from inside Arise.
           files: arise-v1.0.${{ github.run_number }}.apk
           make_latest: true

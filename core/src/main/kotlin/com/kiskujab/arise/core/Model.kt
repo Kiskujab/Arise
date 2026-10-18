@@ -25,6 +25,38 @@ data class Goals(
     val brushCount: Int = 2,
 )
 
+/**
+ * Goals for each day of the week, Monday first. Lets e.g. Saturday have a lighter step goal than
+ * Monday.
+ */
+@Serializable
+data class WeekGoals(val days: List<Goals>) {
+    init {
+        require(days.size == 7) { "WeekGoals needs 7 days" }
+    }
+
+    /** [dayOfWeek] is ISO: 1 = Monday … 7 = Sunday. */
+    fun forDay(dayOfWeek: Int): Goals = days[(dayOfWeek - 1).coerceIn(0, 6)]
+
+    fun forEpochDay(epochDay: Long): Goals = forDay(java.time.LocalDate.ofEpochDay(epochDay).dayOfWeek.value)
+
+    fun with(index: Int, goals: Goals) = WeekGoals(days.mapIndexed { i, g -> if (i == index) goals else g })
+
+    fun withAll(indices: Iterable<Int>, goals: Goals): WeekGoals {
+        val set = indices.toSet()
+        return WeekGoals(days.mapIndexed { i, g -> if (i in set) goals else g })
+    }
+
+    val isUniform: Boolean get() = days.all { it == days[0] }
+
+    companion object {
+        fun uniform(g: Goals) = WeekGoals(List(7) { g })
+        val WEEKDAYS = 0..4
+        val WEEKEND = 5..6
+        val NAMES = listOf("MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN")
+    }
+}
+
 /** What the player reported for a day. `null` means "not reported". */
 data class DayValues(
     val kcal: Int? = null,

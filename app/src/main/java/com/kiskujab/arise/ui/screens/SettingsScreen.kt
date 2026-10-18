@@ -22,6 +22,7 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -37,11 +38,14 @@ import com.kiskujab.arise.core.CustomType
 import com.kiskujab.arise.core.Rank
 import com.kiskujab.arise.core.Rules
 import com.kiskujab.arise.core.Stat
+import com.kiskujab.arise.core.WeekGoals
 import com.kiskujab.arise.ui.MainViewModel
+import com.kiskujab.arise.update.UpdateState
 import com.kiskujab.arise.ui.components.Chip
 import com.kiskujab.arise.ui.components.Divider
 import com.kiskujab.arise.ui.components.GlowText
 import com.kiskujab.arise.ui.components.GoalsForm
+import com.kiskujab.arise.ui.components.applyChanged
 import com.kiskujab.arise.ui.components.SystemButton
 import com.kiskujab.arise.ui.components.SystemNumberField
 import com.kiskujab.arise.ui.components.SystemPanel
@@ -59,9 +63,11 @@ fun SettingsScreen(vm: MainViewModel) {
     val player by vm.player.collectAsStateWithLifecycle()
     val today by vm.today.collectAsStateWithLifecycle()
     val pending by vm.pendingGoals.collectAsStateWithLifecycle()
+    val currentWeek by vm.currentWeekGoals.collectAsStateWithLifecycle()
     val vacations by vm.vacations.collectAsStateWithLifecycle()
     val customs by vm.customs.collectAsStateWithLifecycle()
     val notif by vm.notificationSettings.collectAsStateWithLifecycle()
+    val update by vm.updateState.collectAsStateWithLifecycle()
     val p = player ?: return
     val t = today ?: return
     val todayEpoch = t.epochDay
@@ -117,21 +123,7 @@ fun SettingsScreen(vm: MainViewModel) {
         }
 
         // ------------------------------------------------ goals
-        SystemPanel(title = "TARGETS") {
-            var draft by remember(t.baseGoals, pending) { mutableStateOf(pending ?: t.baseGoals) }
-            if (pending != null) {
-                Text("New targets are scheduled for tomorrow.", style = AriseType.small.copy(color = AriseColors.Gold))
-                Spacer(Modifier.height(8.dp))
-            }
-            GoalsForm(draft) { draft = it }
-            Spacer(Modifier.height(14.dp))
-            SystemButton(
-                "SAVE · APPLIES TOMORROW",
-                onClick = { vm.setGoals(draft) },
-                enabled = draft != (pending ?: t.baseGoals),
-                modifier = Modifier.align(Alignment.CenterHorizontally),
-            )
-        }
+        WeekTargets(currentWeek, pending) { vm.setGoals(it) }
 
         // ------------------------------------------------ custom quests
         SystemPanel(title = "CUSTOM QUESTS") {
@@ -217,8 +209,86 @@ fun SettingsScreen(vm: MainViewModel) {
         SystemPanel(title = "ABOUT") {
             Text("Arise v${BuildConfig.VERSION_NAME}", style = AriseType.bodyBold)
             Text("The System does not forget. There is no reset.", style = AriseType.small)
+            Spacer(Modifier.height(12.dp))
+            when (val u = update) {
+                is UpdateState.Available, is UpdateState.Downloading, is UpdateState.Ready -> UpdateCard(u, onInstall = { vm.installUpdate() })
+                else -> {
+                    Text(
+                        when (u) {
+                            UpdateState.Checking -> "Checking for updates…"
+                            UpdateState.UpToDate -> "You have the latest version."
+                            is UpdateState.Failed -> u.message
+                            else -> "Updates are checked automatically."
+                        },
+                        style = AriseType.small,
+                    )
+                    if ((u as? UpdateState.Failed)?.info != null) {
+                        Spacer(Modifier.height(8.dp))
+                        UpdateCard(u, onInstall = { vm.installUpdate() })
+                    }
+                    Spacer(Modifier.height(8.dp))
+                    SystemButton("CHECK FOR UPDATES", onClick = { vm.checkForUpdates() }, enabled = u != UpdateState.Checking, modifier = Modifier.align(Alignment.CenterHorizontally))
+                }
+            }
         }
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+private val DAY_NAMES = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")
+
+/** Targets per weekday: edit all days at once or a single day, and copy a day to others. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun WeekTargets(current: WeekGoals, pending: WeekGoals?, onSave: (WeekGoals) -> Unit) {
+    val base = pending ?: current
+    var draft by remember(base) { mutableStateOf(base) }
+    var selected by remember { mutableIntStateOf(-1) }
+    var version by remember { mutableIntStateOf(0) }
+
+    SystemPanel(title = "TARGETS") {
+        if (pending != null) {
+            Text("New targets are scheduled for tomorrow.", style = AriseType.small.copy(color = AriseColors.Gold))
+            Spacer(Modifier.height(8.dp))
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Selectable("ALL DAYS", selected == -1) { selected = -1 }
+            WeekGoals.NAMES.forEachIndexed { i, name ->
+                val custom = draft.days[i] != draft.days[0] || (i == 0 && !draft.isUniform)
+                Selectable(if (custom) "$name •" else name, selected == i) { selected = i }
+            }
+        }
+        Spacer(Modifier.height(8.dp))
+        Text(
+            when {
+                selected >= 0 -> "Targets for every ${DAY_NAMES[selected]}."
+                draft.isUniform -> "The same targets every day. Pick a day to give it its own targets."
+                else -> "Days differ (•). Fields show Monday; a field you change here is set on all 7 days."
+            },
+            style = AriseType.small,
+        )
+        Spacer(Modifier.height(12.dp))
+        val shown = draft.days[selected.coerceAtLeast(0)]
+        GoalsForm(shown, resetKey = selected to version) { new ->
+            draft = if (selected == -1) WeekGoals(draft.days.map { applyChanged(shown, new, it) }) else draft.with(selected, new)
+        }
+        if (selected >= 0) {
+            Spacer(Modifier.height(12.dp))
+            Text("COPY ${WeekGoals.NAMES[selected]} TO", style = AriseType.label)
+            Spacer(Modifier.height(6.dp))
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Selectable("WEEKDAYS", false) { draft = draft.withAll(WeekGoals.WEEKDAYS, shown); version++ }
+                Selectable("WEEKEND", false) { draft = draft.withAll(WeekGoals.WEEKEND, shown); version++ }
+                Selectable("ALL DAYS", false) { draft = WeekGoals.uniform(shown); version++ }
+            }
+        }
+        Spacer(Modifier.height(14.dp))
+        SystemButton(
+            "SAVE · APPLIES TOMORROW",
+            onClick = { onSave(draft) },
+            enabled = draft != base,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        )
     }
 }
 

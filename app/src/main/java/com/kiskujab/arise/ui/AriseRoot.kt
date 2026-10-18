@@ -55,6 +55,7 @@ import com.kiskujab.arise.ui.screens.LogScreen
 import com.kiskujab.arise.ui.screens.QuestScreen
 import com.kiskujab.arise.ui.screens.SettingsScreen
 import com.kiskujab.arise.ui.screens.StatusScreen
+import com.kiskujab.arise.ui.screens.UpdateBanner
 import com.kiskujab.arise.ui.theme.AriseColors
 import com.kiskujab.arise.ui.theme.AriseType
 import java.time.Instant
@@ -104,6 +105,7 @@ fun AriseRoot(vm: MainViewModel) {
 private fun MainScaffold(vm: MainViewModel) {
     var tab by rememberSaveable { mutableStateOf(Tab.STATUS) }
     Column(Modifier.fillMaxSize().statusBarsPadding()) {
+        UpdateBanner(vm)
         Box(Modifier.weight(1f).fillMaxWidth().imePadding()) {
             AnimatedContent(tab, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "tab") { t ->
                 when (t) {

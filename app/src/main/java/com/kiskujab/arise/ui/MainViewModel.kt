@@ -13,6 +13,7 @@ import com.kiskujab.arise.core.ItemType
 import com.kiskujab.arise.core.PlayerState
 import com.kiskujab.arise.core.Stat
 import com.kiskujab.arise.core.Title
+import com.kiskujab.arise.core.WeekGoals
 import com.kiskujab.arise.data.DayEntity
 import com.kiskujab.arise.data.DayView
 import com.kiskujab.arise.data.EventEntity
@@ -20,6 +21,7 @@ import com.kiskujab.arise.data.NotificationSettings
 import com.kiskujab.arise.data.PlayerEntity
 import com.kiskujab.arise.data.TimeStatus
 import com.kiskujab.arise.notify.Scheduler
+import com.kiskujab.arise.update.UpdateState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -83,16 +85,25 @@ class MainViewModel(private val app: AriseApp) : ViewModel() {
 
     val notificationSettings: StateFlow<NotificationSettings> = app.settings.notifications
 
-    /** Goals that take effect tomorrow, if they differ from today's. */
-    val pendingGoals: StateFlow<Goals?> = combine(goalsHistory, todayEpoch) { list, today ->
-        list.firstOrNull { it.effectiveFrom > today }?.let { Codec.decodeGoals(it.goalsJson) }
+    val updateState: StateFlow<UpdateState> = app.updates.state
+
+    /** Week goals that take effect tomorrow, if any were saved. */
+    val pendingGoals: StateFlow<WeekGoals?> = combine(goalsHistory, todayEpoch) { list, today ->
+        list.firstOrNull { it.effectiveFrom > today }?.let { Codec.decodeWeek(it.goalsJson) }
     }.stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    /** Week goals in force today. */
+    val currentWeekGoals: StateFlow<WeekGoals> = combine(goalsHistory, todayEpoch) { list, today ->
+        list.filter { it.effectiveFrom <= today }.maxByOrNull { it.effectiveFrom }?.let { Codec.decodeWeek(it.goalsJson) }
+            ?: WeekGoals.uniform(Goals())
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, WeekGoals.uniform(Goals()))
 
     init {
         viewModelScope.launch {
             dao.player()
             _loaded.value = true
         }
+        viewModelScope.launch { app.updates.check() }
         viewModelScope.launch {
             var ticks = 0
             while (true) {
@@ -140,9 +151,9 @@ class MainViewModel(private val app: AriseApp) : ViewModel() {
         }
     }
 
-    fun setGoals(goals: Goals) {
+    fun setGoals(week: WeekGoals) {
         viewModelScope.launch {
-            repo.setGoals(goals)
+            repo.setGoals(week)
             _messages.tryEmit("[SYSTEM] New goals take effect tomorrow.")
         }
     }
@@ -172,6 +183,21 @@ class MainViewModel(private val app: AriseApp) : ViewModel() {
     fun updateNotifications(transform: (NotificationSettings) -> NotificationSettings) {
         app.settings.update(transform)
         Scheduler.schedule(app, app.settings.notifications.value)
+    }
+
+    fun checkForUpdates() = viewModelScope.launch { app.updates.check(showProgress = true) }
+
+    /** Downloads the update if needed, then opens the system installer. */
+    fun installUpdate() = viewModelScope.launch {
+        val file = when (val s = app.updates.state.value) {
+            is UpdateState.Ready -> s.file
+            is UpdateState.Available -> app.updates.download(s.info)
+            is UpdateState.Failed -> s.info?.let { app.updates.download(it) }
+            else -> null
+        } ?: return@launch
+        if (!app.updates.install(file)) {
+            _messages.tryEmit("[SYSTEM] Allow Arise to install apps, then come back and tap INSTALL again.")
+        }
     }
 
     companion object {

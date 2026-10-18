@@ -15,6 +15,7 @@ import com.kiskujab.arise.core.ItemType
 import com.kiskujab.arise.core.PlayerState
 import com.kiskujab.arise.core.Stat
 import com.kiskujab.arise.core.Title
+import com.kiskujab.arise.core.WeekGoals
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.Instant
@@ -49,7 +50,7 @@ class GameRepository(private val db: AriseDatabase) {
         val millis = System.currentTimeMillis()
         val today = today()
         db.withTransaction {
-            dao.upsertGoals(GoalsEntity(today, Codec.encodeGoals(goals)))
+            dao.upsertGoals(GoalsEntity(today, Codec.encodeWeek(WeekGoals.uniform(goals))))
             dao.upsertPlayer(
                 PlayerEntity(
                     name = name.trim().ifBlank { "Player" },
@@ -163,7 +164,7 @@ class GameRepository(private val db: AriseDatabase) {
     // ---------------------------------------------------------------- lookups
 
     suspend fun goalsFor(epochDay: Long): Goals =
-        dao.goalsFor(epochDay)?.let { Codec.decodeGoals(it.goalsJson) } ?: Goals()
+        dao.goalsFor(epochDay)?.let { Codec.decodeWeek(it.goalsJson).forEpochDay(epochDay) } ?: Goals()
 
     suspend fun customsFor(epochDay: Long): List<CustomCriterion> =
         dao.customCriteria().filter { it.activeOn(epochDay) }.map { it.toCore() }
@@ -241,8 +242,8 @@ class GameRepository(private val db: AriseDatabase) {
     // ---------------------------------------------------------------- settings that shape the game
 
     /** New goals apply from tomorrow, so today's quests can't be loosened after the fact. */
-    suspend fun setGoals(goals: Goals) = mutex.withLock {
-        dao.upsertGoals(GoalsEntity(today() + 1, Codec.encodeGoals(goals)))
+    suspend fun setGoals(week: WeekGoals) = mutex.withLock {
+        dao.upsertGoals(GoalsEntity(today() + 1, Codec.encodeWeek(week)))
     }
 
     suspend fun setName(name: String) = mutex.withLock {

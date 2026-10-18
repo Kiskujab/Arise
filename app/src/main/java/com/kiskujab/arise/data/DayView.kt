@@ -31,7 +31,7 @@ data class DayView(
         ): DayView {
             val r = record ?: DayEntity(epochDay)
             val base = goalsHistory.filter { it.effectiveFrom <= epochDay }.maxByOrNull { it.effectiveFrom }
-                ?.let { com.kiskujab.arise.core.Codec.decodeGoals(it.goalsJson) } ?: Goals()
+                ?.let { com.kiskujab.arise.core.Codec.decodeWeek(it.goalsJson).forEpochDay(epochDay) } ?: Goals()
             val vacation = vacations.any { it.covers(epochDay) }
             val penalty = r.penaltyQuest
             val active = customs.filter { it.activeOn(epochDay) }.map { it.toCore() }

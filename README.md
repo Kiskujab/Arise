@@ -25,6 +25,8 @@ by actually living disciplined days. The System tracks:
 - **Calories are exponential.** +200 kcal is a scratch, +600 hurts, +1000 at level 18 drops you to 15.
 - **Penalty Quests are corrective.** Failing the Daily Quest tightens only what went wrong the next day
   (less calories, lower screen limit, more steps…), always within reachable bounds.
+- **Weekday targets.** Every target can differ per day of the week (e.g. 8,000 steps Monday–Friday, 500 on Saturday),
+  set in SYSTEM → Targets.
 - **Vacation mode** makes quests lenient and halves all gains and losses. The share of time you spend on vacation is
   always shown on the Status screen. Vacation, goal changes and new custom quests take effect from the next day.
 - **Clock tampering** (turning the time back) locks the app until the clock is correct.
@@ -40,6 +42,10 @@ Shield and the legendary Skip Day Ticket.
 Every push builds a signed APK in GitHub Actions and publishes it under
 [Releases](https://github.com/Kiskujab/Arise/releases). Download the newest `arise-v1.0.N.apk` on your phone and open it
 (allow installing from your browser when asked). Updates install over the old version and keep your data.
+
+From v1.0.3 on, Arise checks for new releases itself: a banner appears in the app (and a notification in the
+background), and INSTALL downloads the APK and opens the system installer. The first time, Android asks you to allow
+Arise to install apps.
 
 > All builds are signed with `app/arise.jks`, committed to this public repo, so updates always match the installed app.
 > Anyone could sign an APK with that key, so only install Arise builds from this repository's Releases page.

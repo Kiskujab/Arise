@@ -229,6 +229,16 @@ class RulesTest {
 }
 
 class CodecTest {
+    @Test fun weekGoalsReadOldSingleGoals() {
+        val old = Codec.encodeGoals(Goals(steps = 9000))
+        assertEquals(WeekGoals.uniform(Goals(steps = 9000)), Codec.decodeWeek(old))
+        val week = WeekGoals.uniform(Goals()).with(5, Goals(steps = 500))
+        assertEquals(week, Codec.decodeWeek(Codec.encodeWeek(week)))
+        // 2026-10-17 is a Saturday.
+        assertEquals(500, week.forEpochDay(java.time.LocalDate.of(2026, 10, 17).toEpochDay()).steps)
+        assertEquals(8000, week.forEpochDay(java.time.LocalDate.of(2026, 10, 19).toEpochDay()).steps)
+    }
+
     @Test fun playerRoundTrips() {
         val p = PlayerState(xp = 1234, maxLevel = 9, streak = 3, inventory = mapOf(ItemType.XP_BOOSTER to 2), statPoints = mapOf(Stat.STR to 1.5), titles = setOf(Title.PLAYER, Title.AWAKENED))
         assertEquals(p, Codec.decodePlayer(Codec.encodePlayer(p)))
