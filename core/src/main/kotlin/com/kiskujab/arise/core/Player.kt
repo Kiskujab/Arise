@@ -1,6 +1,9 @@
 package com.kiskujab.arise.core
 
+import kotlinx.serialization.Serializable
+
 /** Everything about the player that changes when a day is finalized. */
+@Serializable
 data class PlayerState(
     val xp: Long = 0,
     val maxLevel: Int = 1,
@@ -32,6 +35,7 @@ data class PlayerState(
 }
 
 /** Lifetime counters used for titles. */
+@Serializable
 data class Counters(
     val daysTracked: Int = 0,
     val daysAbsent: Int = 0,

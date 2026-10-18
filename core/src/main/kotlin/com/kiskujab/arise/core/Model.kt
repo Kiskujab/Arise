@@ -1,5 +1,7 @@
 package com.kiskujab.arise.core
 
+import kotlinx.serialization.Serializable
+
 /** Player attributes. Each tracked criterion feeds one of them. */
 enum class Stat(val full: String) {
     STR("Strength"),
@@ -11,6 +13,7 @@ enum class Stat(val full: String) {
 }
 
 /** The player's targets. A snapshot is taken for every day so history never changes. */
+@Serializable
 data class Goals(
     val kcal: Int = 2200,
     val protein: Int = 150,

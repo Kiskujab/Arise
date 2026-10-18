@@ -1,5 +1,7 @@
 package com.kiskujab.arise.core
 
+import kotlinx.serialization.Serializable
+
 import kotlin.math.roundToInt
 import kotlin.random.Random
 
@@ -8,6 +10,8 @@ data class DayModifiers(
     val booster: Boolean = false,
     val shield: Boolean = false,
     val skipDay: Boolean = false,
+    /** The awakening day: losses are forgiven and no penalty quest follows. */
+    val newcomer: Boolean = false,
 )
 
 data class FinalizeInput(
@@ -27,6 +31,7 @@ data class FinalizeInput(
     val seed: Long,
 )
 
+@Serializable
 data class XpLine(val label: String, val amount: Int)
 
 enum class EventType {
@@ -106,7 +111,10 @@ object Finalizer {
         }
 
         var rawDelta = lines.sumOf { it.amount }
-        if (rawDelta < 0 && input.modifiers.shield) {
+        if (rawDelta < 0 && input.modifiers.newcomer) {
+            lines += XpLine("Newcomer's Blessing", -rawDelta)
+            rawDelta = 0
+        } else if (rawDelta < 0 && input.modifiers.shield) {
             lines += XpLine("Penalty Shield", -rawDelta)
             events += SystemEvent(EventType.SHIELD_USED, "Penalty Shield", "The shield absorbed ${-rawDelta} XP of damage.")
             rawDelta = 0
@@ -188,7 +196,7 @@ object Finalizer {
         for (t in newTitles) events += SystemEvent(EventType.TITLE, "Title Acquired: ${t.displayName}", t.description)
 
         // --- Tomorrow's penalty ---
-        val nextPenalty = if (!cleared && !skip && !input.nextDayVacation) {
+        val nextPenalty = if (!cleared && !skip && !input.modifiers.newcomer && !input.nextDayVacation) {
             PenaltyQuest.fromFailures(score, input.customs, input.nextDayBaseGoals)
         } else {
             null

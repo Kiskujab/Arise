@@ -1,8 +1,11 @@
 package com.kiskujab.arise.core
 
+import kotlinx.serialization.Serializable
+
 import kotlin.math.max
 import kotlin.math.min
 
+@Serializable
 data class CriterionResult(
     val key: String,
     val label: String,

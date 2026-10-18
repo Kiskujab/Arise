@@ -127,6 +127,12 @@ class RulesTest {
         assertEquals(1, vac.player.counters.vacationDays)
     }
 
+    @Test fun newcomerDayForgivesLosses() {
+        val r = Finalizer.finalize(input(DayValues(), absent = true, mods = DayModifiers(newcomer = true)), playerAt(1))
+        assertEquals(0, r.appliedDelta)
+        assertNull(r.nextPenalty)
+    }
+
     @Test fun skipDayIsPerfect() {
         val r = Finalizer.finalize(input(DayValues(), mods = DayModifiers(skipDay = true)), playerAt(10))
         assertTrue(r.questCleared)
@@ -219,5 +225,14 @@ class RulesTest {
         assertEquals(listOf(day), DayClock.daysToFinalize(day.minusDays(1), LocalDateTime.of(2026, 10, 19, 12, 0)))
         assertEquals(emptyList<LocalDate>(), DayClock.daysToFinalize(day.minusDays(1), LocalDateTime.of(2026, 10, 19, 11, 0)))
         assertEquals(3, DayClock.daysToFinalize(day.minusDays(3), LocalDateTime.of(2026, 10, 19, 13, 0)).size)
+    }
+}
+
+class CodecTest {
+    @Test fun playerRoundTrips() {
+        val p = PlayerState(xp = 1234, maxLevel = 9, streak = 3, inventory = mapOf(ItemType.XP_BOOSTER to 2), statPoints = mapOf(Stat.STR to 1.5), titles = setOf(Title.PLAYER, Title.AWAKENED))
+        assertEquals(p, Codec.decodePlayer(Codec.encodePlayer(p)))
+        assertEquals(mapOf(1L to 2.5), Codec.decodeCustom(Codec.encodeCustom(mapOf(1L to 2.5))))
+        assertEquals(Goals(kcal = 1900), Codec.decodeGoals(Codec.encodeGoals(Goals(kcal = 1900))))
     }
 }
