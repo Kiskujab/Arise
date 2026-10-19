@@ -6,12 +6,18 @@ import com.kiskujab.arise.core.CustomCriterion
 import com.kiskujab.arise.core.CustomType
 import com.kiskujab.arise.core.DayClock
 import com.kiskujab.arise.core.DayResultRecord
+import com.kiskujab.arise.core.Equipment
 import com.kiskujab.arise.core.EventType
 import com.kiskujab.arise.core.FinalizeInput
 import com.kiskujab.arise.core.FinalizeResult
 import com.kiskujab.arise.core.Finalizer
 import com.kiskujab.arise.core.Goals
 import com.kiskujab.arise.core.ItemType
+import com.kiskujab.arise.core.Loadout
+import com.kiskujab.arise.core.Rules
+import com.kiskujab.arise.core.Shop
+import com.kiskujab.arise.core.TrialSpan
+import com.kiskujab.arise.core.Trials
 import com.kiskujab.arise.core.PlayerState
 import com.kiskujab.arise.core.Stat
 import com.kiskujab.arise.core.Title
@@ -141,14 +147,27 @@ class GameRepository(private val db: AriseDatabase) {
         val next = dao.day(epochDay + 1) ?: DayEntity(epochDay + 1)
         dao.upsertDay(next.copy(penalty = result.nextPenalty?.encode()))
 
-        val newTitle = result.player.titles - p.state.titles
+        // Trials whose last day this was.
+        val finished = TrialSpan.entries.flatMap { span ->
+            val start = Trials.periodStart(span, epochDay, p.awakenedEpochDay)
+            val trials = Trials.forPeriod(span, epochDay, p.awakenedEpochDay, p.seed, goalsFor(start))
+            if (trials.isEmpty() || trials.first().endDay != epochDay) return@flatMap emptyList()
+            val days = trials.first().days.map { d ->
+                val e = dao.day(d) ?: DayEntity(d, finalized = true, absent = true)
+                TrialBoard.finalDay(e, goalsFor(d))
+            }
+            trials.map { it to days }
+        }
+        val (state, trialEvents) = Trials.settle(result.player, finished)
+
+        val newTitle = state.titles - p.state.titles
         val activeTitle = if (p.activeTitle == Title.PLAYER.name && newTitle.isNotEmpty()) newTitle.last().name else p.activeTitle
         dao.upsertPlayer(
-            p.copy(lastFinalizedDay = epochDay, stateJson = Codec.encodePlayer(result.player), activeTitle = activeTitle),
+            p.copy(lastFinalizedDay = epochDay, stateJson = Codec.encodePlayer(state), activeTitle = activeTitle),
         )
 
         val date = LocalDate.ofEpochDay(epochDay).format(DATE_FORMAT)
-        for (e in result.events) {
+        for (e in result.events + trialEvents) {
             val headline = e.type == EventType.DAY_RESULT || e.type == EventType.ABSENT
             dao.insertEvent(
                 EventEntity(
@@ -158,7 +177,7 @@ class GameRepository(private val db: AriseDatabase) {
                 ),
             )
         }
-        result
+        result.copy(player = state)
     }
 
     // ---------------------------------------------------------------- lookups
@@ -239,6 +258,46 @@ class GameRepository(private val db: AriseDatabase) {
         Result.success(message)
     }
 
+    // ---------------------------------------------------------------- gear
+
+    /** Saves the loadout for tomorrow onwards; whatever isn't unlocked, owned or slotted is dropped. */
+    suspend fun setLoadout(l: Loadout): Result<String> = mutex.withLock {
+        val p = dao.player() ?: return@withLock Result.failure(IllegalStateException("No player"))
+        val s = p.state
+        val clean = l.effective(s)
+        dao.upsertPlayer(p.copy(stateJson = Codec.encodePlayer(s.withLoadout(today() + 1, clean))))
+        Result.success("Loadout saved. It takes effect tomorrow.")
+    }
+
+    suspend fun buyEquipment(e: Equipment): Result<String> = mutex.withLock {
+        val p = dao.player() ?: return@withLock Result.failure(IllegalStateException("No player"))
+        val s = p.state
+        when {
+            e in s.equipment -> return@withLock Result.failure(IllegalStateException("You already own ${e.displayName}."))
+            !e.unlock.isMet(s) -> return@withLock Result.failure(IllegalStateException("Locked: ${e.unlock.text}."))
+            s.gold < e.price -> return@withLock Result.failure(IllegalStateException("Not enough gold."))
+        }
+        dao.upsertPlayer(p.copy(stateJson = Codec.encodePlayer(s.copy(gold = s.gold - e.price, equipment = s.equipment + e))))
+        val msg = "${e.displayName} acquired. Equip it in your loadout."
+        dao.insertEvent(EventEntity(timestamp = System.currentTimeMillis(), epochDay = today(), type = EventType.GEAR.name, title = "Purchased: ${e.displayName}", message = msg, seen = true))
+        Result.success(msg)
+    }
+
+    suspend fun buyItem(item: ItemType): Result<String> = mutex.withLock {
+        val p = dao.player() ?: return@withLock Result.failure(IllegalStateException("No player"))
+        val s = p.state
+        val price = Shop.prices[item] ?: return@withLock Result.failure(IllegalStateException("Not for sale."))
+        when {
+            s.gold < price -> return@withLock Result.failure(IllegalStateException("Not enough gold."))
+            item == ItemType.STREAK_FREEZE && s.count(item) >= Rules.MAX_FREEZES ->
+                return@withLock Result.failure(IllegalStateException("You can hold at most ${Rules.MAX_FREEZES} Streak Freezes."))
+        }
+        dao.upsertPlayer(p.copy(stateJson = Codec.encodePlayer(s.copy(gold = s.gold - price).withItem(item, 1))))
+        val msg = "${item.displayName} added to your inventory."
+        dao.insertEvent(EventEntity(timestamp = System.currentTimeMillis(), epochDay = today(), type = EventType.GEAR.name, title = "Purchased: ${item.displayName}", message = msg, seen = true))
+        Result.success(msg)
+    }
+
     // ---------------------------------------------------------------- settings that shape the game
 
     /** New goals apply from tomorrow, so today's quests can't be loosened after the fact. */
@@ -283,7 +342,7 @@ class GameRepository(private val db: AriseDatabase) {
         dao.insertCustom(
             CustomCriterionEntity(
                 name = name.trim(), type = type.name, target = target, unit = unit.trim(), stat = stat.name,
-                weight = com.kiskujab.arise.core.Rules.CUSTOM_DEFAULT_WEIGHT, createdDay = today() + 1,
+                weight = Rules.CUSTOM_DEFAULT_WEIGHT, createdDay = today() + 1,
             ),
         )
     }

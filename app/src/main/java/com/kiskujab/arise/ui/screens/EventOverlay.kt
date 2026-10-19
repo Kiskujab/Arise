@@ -54,7 +54,9 @@ import com.kiskujab.arise.ui.theme.AriseType
 fun eventAccent(type: String): Color = when (runCatching { EventType.valueOf(type) }.getOrNull()) {
     EventType.LEVEL_UP, EventType.PENALTY_CLEARED, EventType.SHIELD_USED, EventType.FREEZE_USED -> AriseColors.Cyan
     EventType.RANK_UP, EventType.TITLE -> AriseColors.Gold
-    EventType.ITEM -> AriseColors.Purple
+    EventType.ITEM, EventType.GEAR -> AriseColors.Purple
+    EventType.UNLOCK, EventType.TRIAL_CLEARED -> AriseColors.Gold
+    EventType.TRIAL_FAILED -> AriseColors.TextDim
     EventType.LEVEL_DOWN, EventType.RANK_DOWN, EventType.ABSENT, EventType.PENALTY_FAILED,
     EventType.STREAK_BROKEN, EventType.PENALTY_ASSIGNED -> AriseColors.Red
     else -> AriseColors.Blue
@@ -62,6 +64,9 @@ fun eventAccent(type: String): Color = when (runCatching { EventType.valueOf(typ
 
 private fun eventHeader(type: String): String = when (runCatching { EventType.valueOf(type) }.getOrNull()) {
     EventType.ITEM -> "ITEM"
+    EventType.UNLOCK -> "UNLOCKED"
+    EventType.TRIAL_CLEARED, EventType.TRIAL_FAILED -> "TRIAL"
+    EventType.GEAR -> "ARMORY"
     EventType.TITLE -> "TITLE"
     EventType.LEVEL_DOWN, EventType.RANK_DOWN, EventType.ABSENT, EventType.PENALTY_FAILED, EventType.STREAK_BROKEN -> "WARNING"
     EventType.PENALTY_ASSIGNED -> "PENALTY QUEST"

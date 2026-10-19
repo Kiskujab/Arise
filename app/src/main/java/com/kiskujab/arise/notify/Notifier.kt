@@ -25,6 +25,7 @@ object Notifier {
     const val ID_FINAL = 5
     const val ID_RESULT = 6
     const val ID_UPDATE = 7
+    const val ID_TEST = 8
 
     fun createChannels(context: Context) {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return

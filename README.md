@@ -37,6 +37,30 @@ Grandmaster (100) → Challenger (110). Max level 120.
 Items drop rarely: Streak Freeze (also every 7-day streak), XP Booster, Random Box (also at every safe zone), Penalty
 Shield and the legendary Skip Day Ticket.
 
+## Gold, runes and equipment
+
+- Every reported day earns **gold**: the XP you kept, plus 10 for a cleared Daily Quest. Absent days earn nothing.
+- **Runes** are passive perks unlocked by playing (streaks, S-grade days, penalty clears…). The rune page has one keystone
+  (from level 3) and up to three minor runes (levels 5, 12, 25).
+- **Equipment** unlocks the same way and is bought with gold in the Armory. You get one item slot per rank (E 1 … S 6).
+- Consumables (except Skip Day) can also be bought with gold.
+- Loadout changes apply from the next day, and gear does nothing on a day you didn't report.
+- Names are inspired by MOBA runes and items, not copied.
+
+## Trials
+
+- **3-Day Trial** (in blocks from your awakening day) and **Weekly Raid** (Monday–Sunday, two objectives) give extra XP
+  and gold; clearing both raid objectives drops a Random Box.
+- Objectives: Daily Quest clears, protein, calories, steps, rubber bands, brushing, skincare, screen time, S grades.
+  Self-development is never an objective. Trials only reward; failing costs nothing.
+
+## Notifications
+
+Notifications fire from exact alarms (Doze-safe) and are re-armed after reboots, app updates and clock or time zone
+changes. An hourly check delivers a missed morning, evening or final notification late instead of never.
+SYSTEM → Notifications shows whether anything (permission, exact alarms, battery restrictions) could block them and can
+send a test notification.
+
 ## Install
 
 Every push builds a signed APK in GitHub Actions and publishes it under

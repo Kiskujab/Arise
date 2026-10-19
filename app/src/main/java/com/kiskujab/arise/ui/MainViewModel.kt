@@ -20,7 +20,14 @@ import com.kiskujab.arise.data.EventEntity
 import com.kiskujab.arise.data.NotificationSettings
 import com.kiskujab.arise.data.PlayerEntity
 import com.kiskujab.arise.data.TimeStatus
+import com.kiskujab.arise.core.Equipment
+import com.kiskujab.arise.core.Loadout
+import com.kiskujab.arise.data.TrialBoard
+import com.kiskujab.arise.data.TrialCard
+import com.kiskujab.arise.notify.NotificationHealth
+import com.kiskujab.arise.notify.Notifier
 import com.kiskujab.arise.notify.Scheduler
+import com.kiskujab.arise.notify.Slot
 import com.kiskujab.arise.update.UpdateState
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
@@ -38,6 +45,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.time.LocalDateTime
+
+enum class Intro { BOOT, DAILY }
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class MainViewModel(private val app: AriseApp) : ViewModel() {
@@ -98,9 +107,25 @@ class MainViewModel(private val app: AriseApp) : ViewModel() {
             ?: WeekGoals.uniform(Goals())
     }.stateIn(viewModelScope, SharingStarted.Eagerly, WeekGoals.uniform(Goals()))
 
+    /** Days of the current trial periods, for live trial progress. */
+    val trials: StateFlow<List<TrialCard>> = todayEpoch.flatMapLatest { today ->
+        combine(dao.daysFromFlow(today - 7), player, goalsHistory, customs, vacations) { days, p, g, cs, vs ->
+            if (p == null) emptyList() else TrialBoard.build(today, p, days.associateBy { it.epochDay }, g, cs, vs)
+        }
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+
+    private val _intro = MutableStateFlow<Intro?>(null)
+    /** The entry animation to show: every launch, and a longer one on the first open of the day. */
+    val intro: StateFlow<Intro?> = _intro.asStateFlow()
+
     init {
         viewModelScope.launch {
-            dao.player()
+            val p = dao.player()
+            val (status, _) = repo.process()
+            _timeStatus.value = status
+            if (p != null && status is TimeStatus.Ok) {
+                _intro.value = if (app.settings.lastIntroDay != todayEpochNow()) Intro.DAILY else Intro.BOOT
+            }
             _loaded.value = true
         }
         viewModelScope.launch { app.updates.check() }
@@ -117,6 +142,52 @@ class MainViewModel(private val app: AriseApp) : ViewModel() {
         }
     }
 
+    private fun todayEpochNow() = java.time.LocalDate.now().toEpochDay()
+
+    /** Back in the foreground: re-check the rules, re-arm notifications, greet a new day. */
+    fun onResume() {
+        refresh()
+        Scheduler.schedule(app, app.settings.notifications.value)
+        if (_loaded.value && player.value != null && _intro.value == null && app.settings.lastIntroDay != todayEpochNow()) {
+            _intro.value = Intro.DAILY
+        }
+    }
+
+    fun dismissIntro() {
+        if (_intro.value == Intro.DAILY) {
+            val today = todayEpochNow()
+            app.settings.lastIntroDay = today
+            // Seen in the app: no need for the morning notification to catch up later.
+            val n = LocalDateTime.now()
+            if (n.hour * 60 + n.minute >= app.settings.notifications.value.morningMinute) {
+                app.settings.markDelivered(Slot.MORNING.name, today)
+            }
+        }
+        _intro.value = null
+    }
+
+    fun setLoadout(l: Loadout) = viewModelScope.launch {
+        repo.setLoadout(l).onSuccess { _messages.tryEmit("[SYSTEM] $it") }.onFailure { _messages.tryEmit(it.message ?: "Failed") }
+    }
+
+    fun buyEquipment(e: Equipment) = viewModelScope.launch {
+        repo.buyEquipment(e).onSuccess { _messages.tryEmit("[SYSTEM] $it") }.onFailure { _messages.tryEmit(it.message ?: "Failed") }
+    }
+
+    fun buyItem(item: ItemType) = viewModelScope.launch {
+        repo.buyItem(item).onSuccess { _messages.tryEmit("[SYSTEM] $it") }.onFailure { _messages.tryEmit(it.message ?: "Failed") }
+    }
+
+    fun notificationHealth(): NotificationHealth = NotificationHealth.check(app)
+
+    fun sendTestNotification() {
+        if (!Notifier.canPost(app)) {
+            _messages.tryEmit("[SYSTEM] Notifications are blocked. Allow them first.")
+            return
+        }
+        Notifier.post(app, Notifier.ID_TEST, Notifier.CHANNEL_QUESTS, "[SYSTEM] Test notification", "The System can reach you. Quests will arrive on time.")
+    }
+
     fun refresh() {
         viewModelScope.launch {
             val (status, _) = repo.process()
@@ -127,6 +198,7 @@ class MainViewModel(private val app: AriseApp) : ViewModel() {
     fun awaken(name: String, goals: Goals) {
         viewModelScope.launch {
             repo.awaken(name, goals)
+            app.settings.lastIntroDay = todayEpochNow()
             Scheduler.schedule(app, app.settings.notifications.value)
         }
     }

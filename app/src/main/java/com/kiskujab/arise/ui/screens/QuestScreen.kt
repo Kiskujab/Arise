@@ -47,6 +47,7 @@ import com.kiskujab.arise.ui.components.SystemNumberField
 import com.kiskujab.arise.ui.components.SystemPanel
 import com.kiskujab.arise.ui.components.SystemStepper
 import com.kiskujab.arise.ui.components.fmt
+import com.kiskujab.arise.ui.components.reveal
 import com.kiskujab.arise.ui.theme.AriseColors
 import com.kiskujab.arise.ui.theme.AriseType
 import java.time.LocalDate
@@ -61,6 +62,7 @@ fun QuestScreen(vm: MainViewModel) {
     val player by vm.player.collectAsStateWithLifecycle()
     val state by vm.playerState.collectAsStateWithLifecycle()
     val now by vm.now.collectAsStateWithLifecycle()
+    val trials by vm.trials.collectAsStateWithLifecycle()
     val t = todayView ?: return
     val p = player ?: return
 
@@ -72,7 +74,7 @@ fun QuestScreen(vm: MainViewModel) {
     val key = t.epochDay
 
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        SystemPanel(title = "DAILY QUEST") {
+        SystemPanel(title = "DAILY QUEST", modifier = Modifier.reveal(0)) {
             GlowText("Preparations to Become Powerful", AriseType.title, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
             Spacer(Modifier.height(4.dp))
             Text(
@@ -104,7 +106,7 @@ fun QuestScreen(vm: MainViewModel) {
         }
 
         t.penalty?.let { pq ->
-            SystemPanel(title = "PENALTY QUEST", accent = AriseColors.Red) {
+            SystemPanel(title = "PENALTY QUEST", accent = AriseColors.Red, modifier = Modifier.reveal(1)) {
                 Text("Yesterday's failures must be corrected today:", style = AriseType.small)
                 Spacer(Modifier.height(6.dp))
                 pq.describe(t.customs).forEach { line ->
@@ -115,6 +117,8 @@ fun QuestScreen(vm: MainViewModel) {
                 }
             }
         }
+
+        TrialsPanel(trials, Modifier.reveal(2))
 
         val g = t.goals
         QuestSection("NUTRITION", "from Yazio") {
@@ -228,7 +232,8 @@ private fun Projection(t: DayView, awakenedDay: Long, state: PlayerState) {
             }
             GlowText(result.grade.label, AriseType.title, color = color, glow = color)
             Spacer(Modifier.width(14.dp))
-            GlowText((if (result.appliedDelta >= 0) "+" else "") + "${result.appliedDelta} XP", AriseType.number, color = color, glow = color)
+            val shown by androidx.compose.animation.core.animateIntAsState(result.appliedDelta, androidx.compose.animation.core.tween(600), label = "xp")
+            GlowText((if (shown >= 0) "+" else "") + "$shown XP", AriseType.number, color = color, glow = color)
         }
         Text(
             if (expanded) "▴ hide breakdown" else "▾ show breakdown",

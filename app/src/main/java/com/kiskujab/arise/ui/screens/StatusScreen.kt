@@ -40,6 +40,9 @@ import com.kiskujab.arise.core.Stat
 import com.kiskujab.arise.core.Title
 import com.kiskujab.arise.ui.MainViewModel
 import com.kiskujab.arise.ui.components.Chip
+import com.kiskujab.arise.ui.components.CountUpText
+import com.kiskujab.arise.ui.components.RankEmblem
+import com.kiskujab.arise.ui.components.reveal
 import com.kiskujab.arise.ui.components.Divider
 import com.kiskujab.arise.ui.components.GlowText
 import com.kiskujab.arise.ui.components.SystemBar
@@ -77,7 +80,7 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
             GlowText("ARISE", AriseType.title.copy(fontSize = 24.sp, letterSpacing = 8.sp))
         }
 
-        SystemPanel(title = "STATUS") {
+        SystemPanel(title = "STATUS", modifier = Modifier.reveal(0)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     InfoLine("NAME", p.name)
@@ -88,23 +91,22 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
                     }
                 }
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    GlowText(level.toString(), AriseType.display.copy(fontSize = 56.sp))
+                    CountUpText(level.toLong(), AriseType.display.copy(fontSize = 56.sp), durationMillis = 700)
                     Text("LEVEL", style = AriseType.header)
                 }
             }
             Divider()
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("RANK", style = AriseType.label, modifier = Modifier.width(64.dp))
-                Box(
-                    Modifier
-                        .border(1.5.dp, rankColor, RoundedCornerShape(4.dp))
-                        .background(rankColor.copy(alpha = 0.15f))
-                        .padding(horizontal = 12.dp, vertical = 4.dp),
-                ) {
-                    GlowText(rank.label, AriseType.title, color = rankColor, glow = rankColor)
-                }
+                RankEmblem(rank, 64.dp)
                 Spacer(Modifier.width(12.dp))
-                Text(rank.title, style = AriseType.bodyBold.copy(color = rankColor))
+                Column(Modifier.weight(1f)) {
+                    Text("RANK", style = AriseType.label)
+                    Text(rank.title, style = AriseType.bodyBold.copy(color = rankColor))
+                }
+                Column(horizontalAlignment = Alignment.End) {
+                    Text("GOLD", style = AriseType.label)
+                    CountUpText(state.gold, AriseType.number.copy(color = AriseColors.Gold), durationMillis = 700, glow = AriseColors.Gold, suffix = " G")
+                }
             }
             Spacer(Modifier.height(14.dp))
             Row {
@@ -131,7 +133,7 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
         if (t != null) {
             val midnight = now.toLocalDate().plusDays(1).atStartOfDay()
             val accent = if (t.penalty != null) AriseColors.Red else AriseColors.Blue
-            SystemPanel(title = if (t.penalty != null) "PENALTY ACTIVE" else "DAILY QUEST", accent = accent) {
+            SystemPanel(title = if (t.penalty != null) "PENALTY ACTIVE" else "DAILY QUEST", accent = accent, modifier = Modifier.reveal(1)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
                         Text(
@@ -149,7 +151,24 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
             }
         }
 
-        SystemPanel(title = "STATS") {
+        val trials by vm.trials.collectAsStateWithLifecycle()
+        if (trials.isNotEmpty()) {
+            SystemPanel(title = "TRIALS", accent = AriseColors.Gold, modifier = Modifier.reveal(2).clickable(onClick = onOpenQuests)) {
+                for (c in trials) {
+                    Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(c.trial.kind.title, style = AriseType.bodyBold)
+                            Text(c.trial.span.label + " · " + if (c.daysLeft <= 1) "last day" else "${c.daysLeft} days left", style = AriseType.small)
+                        }
+                        Text(c.progress.text, style = AriseType.label.copy(color = AriseColors.Gold))
+                    }
+                    SystemBar(c.progress.fraction, height = 4.dp, color = AriseColors.Gold)
+                    Spacer(Modifier.height(4.dp))
+                }
+            }
+        }
+
+        SystemPanel(title = "STATS", modifier = Modifier.reveal(3)) {
             val stats = Stat.entries
             for (row in stats.chunked(2)) {
                 Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
@@ -157,7 +176,7 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
                         Row(Modifier.weight(1f), verticalAlignment = Alignment.CenterVertically) {
                             GlowText(s.name, AriseType.header.copy(color = AriseColors.Text), modifier = Modifier.width(48.dp))
                             Column {
-                                GlowText(state.statValue(s).toString(), AriseType.number)
+                                CountUpText(state.statValue(s).toLong(), AriseType.number, durationMillis = 800)
                                 Text(s.full + " · " + statSource(s), style = AriseType.small.copy(fontSize = 12.sp))
                             }
                         }
@@ -168,7 +187,7 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
 
         val c = state.counters
         val daysSince = (now.toLocalDate().toEpochDay() - p.awakenedEpochDay + 1).coerceAtLeast(1)
-        SystemPanel(title = "RECORDS") {
+        SystemPanel(title = "RECORDS", modifier = Modifier.reveal(4)) {
             RecordRow("Current streak", "${state.streak} days", AriseColors.Cyan)
             RecordRow("Best streak", "${state.bestStreak} days")
             RecordRow("Streak freezes", "${state.count(com.kiskujab.arise.core.ItemType.STREAK_FREEZE)} / ${Rules.MAX_FREEZES}")
@@ -183,6 +202,8 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
             val ratio = if (c.daysTracked == 0) 0.0 else c.vacationDays * 100.0 / c.daysTracked
             RecordRow("Time on vacation", String.format(Locale.US, "%.1f%%  (%d of %d days)", ratio, c.vacationDays, c.daysTracked), AriseColors.Purple)
             RecordRow("Total EXP", state.xp.toString())
+            RecordRow("Gold earned", "${c.goldEarned} G", AriseColors.Gold)
+            RecordRow("Trials cleared", c.trialsCleared.toString())
         }
 
         SystemButton("TITLES (${state.titles.size}/${Title.entries.size})", onClick = { showTitles = true }, accent = AriseColors.Gold, modifier = Modifier.align(Alignment.CenterHorizontally))

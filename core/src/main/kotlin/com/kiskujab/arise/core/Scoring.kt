@@ -31,6 +31,8 @@ data class DayScore(
     val kcalPenalty: Double,
     val productivityBonus: Double,
     val overachieveBonus: Double,
+    val bandBonus: Double = 0.0,
+    val movementBonus: Double = 0.0,
     val questCleared: Boolean,
     val grade: Grade,
 ) {
@@ -137,8 +139,9 @@ object Scoring {
         )
         val bandExtra = ((values.bandHours ?: 0.0).coerceAtMost(Rules.BAND_MAX_HOURS) - goals.bandHours).coerceAtLeast(0.0)
         val movementExtra = (stepsR - 1).coerceAtLeast(0.0) + (activeR - 1).coerceAtLeast(0.0)
-        val overachieve = if (skipDay) 0.0 else
-            bandExtra * Rules.BAND_BONUS_PER_HOUR + min(Rules.MOVEMENT_BONUS_MAX, movementExtra * 10.0)
+        val bandBonus = if (skipDay) 0.0 else bandExtra * Rules.BAND_BONUS_PER_HOUR
+        val movementBonus = if (skipDay) 0.0 else min(Rules.MOVEMENT_BONUS_MAX, movementExtra * 10.0)
+        val overachieve = bandBonus + movementBonus
 
         val cleared = scored.filter { it.mandatory }.all { it.met }
         val grade = when {
@@ -159,6 +162,8 @@ object Scoring {
             kcalPenalty = kcalPenalty,
             productivityBonus = productivityBonus,
             overachieveBonus = overachieve,
+            bandBonus = bandBonus,
+            movementBonus = movementBonus,
             questCleared = cleared,
             grade = grade,
         )

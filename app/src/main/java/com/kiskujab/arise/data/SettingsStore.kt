@@ -44,6 +44,22 @@ class SettingsStore(context: Context) {
         )
     }
 
+    private val state = context.getSharedPreferences("arise_state", Context.MODE_PRIVATE)
+
+    /** Epoch day a once-a-day notification was last delivered. */
+    fun deliveredDay(slot: String): Long = state.getLong("delivered_$slot", Long.MIN_VALUE)
+
+    fun markDelivered(slot: String, day: Long) {
+        state.edit().putLong("delivered_$slot", day).commit()
+    }
+
+    /** Epoch day the daily arrival animation was last shown. */
+    var lastIntroDay: Long
+        get() = state.getLong("lastIntroDay", Long.MIN_VALUE)
+        set(value) {
+            state.edit().putLong("lastIntroDay", value).apply()
+        }
+
     fun update(transform: (NotificationSettings) -> NotificationSettings) {
         val n = transform(_notifications.value)
         prefs.edit()

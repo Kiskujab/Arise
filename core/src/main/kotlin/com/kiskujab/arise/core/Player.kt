@@ -15,6 +15,17 @@ data class PlayerState(
     val statPoints: Map<Stat, Double> = emptyMap(),
     val counters: Counters = Counters(),
     val titles: Set<Title> = setOf(Title.PLAYER),
+    val gold: Long = 0,
+    /** Equipment bought in the Armory. */
+    val equipment: Set<Equipment> = emptySet(),
+    /** Loadout versions; the latest one starting on or before a day is in force that day. */
+    val loadouts: List<DatedLoadout> = emptyList(),
+    /** Equipment cooldowns: name → epoch day it last triggered. */
+    val cooldowns: Map<String, Long> = emptyMap(),
+    /** Runes and equipment the player has been told are unlocked. */
+    val knownUnlocks: Set<String> = emptySet(),
+    /** Recent trial outcomes by [Trial.key]. */
+    val trialResults: Map<String, Boolean> = emptyMap(),
 ) {
     val level: Int get() = Rules.levelForXp(xp)
     val rank: Rank get() = Rank.forLevel(level)
@@ -26,6 +37,24 @@ data class PlayerState(
         val capped = if (item == ItemType.STREAK_FREEZE) n.coerceAtMost(Rules.MAX_FREEZES) else n
         return copy(inventory = inventory + (item to capped))
     }
+
+    fun loadoutFor(epochDay: Long): Loadout =
+        loadouts.filter { it.from <= epochDay }.maxByOrNull { it.from }?.loadout ?: Loadout()
+
+    /** The loadout that applies once [from] arrives. Later versions are replaced. */
+    fun withLoadout(from: Long, l: Loadout): PlayerState =
+        copy(loadouts = loadouts.filter { it.from < from } + DatedLoadout(from, l))
+
+    /** Forgets versions no day after [epochDay] can use any more. */
+    fun prunedLoadouts(epochDay: Long): PlayerState {
+        val current = loadouts.filter { it.from <= epochDay }.maxByOrNull { it.from }
+        return copy(loadouts = listOfNotNull(current) + loadouts.filter { it.from > epochDay })
+    }
+
+    fun cooldownReady(name: String, day: Long, days: Long): Boolean = cooldowns[name]?.let { day - it >= days } ?: true
+
+    fun unlockedRunes(): List<Rune> = Rune.entries.filter { it.unlock.isMet(this) }
+    fun unlockedEquipment(): List<Equipment> = Equipment.entries.filter { it.unlock.isMet(this) }
 
     fun statValue(stat: Stat): Int = (BASE_STAT + (statPoints[stat] ?: 0.0)).toInt().coerceAtLeast(1)
 
@@ -53,6 +82,8 @@ data class Counters(
     val totalSteps: Long = 0,
     val productivityMinutes: Long = 0,
     val itemsFound: Int = 0,
+    val trialsCleared: Int = 0,
+    val goldEarned: Long = 0,
 )
 
 enum class Title(val displayName: String, val description: String) {
@@ -73,6 +104,7 @@ enum class Title(val displayName: String, val description: String) {
     SCHOLAR("Scholar", "Spend 100 hours on self-development."),
     FLAWLESS("Flawless", "Earn 10 S-grade days."),
     TREASURE_HUNTER("Treasure Hunter", "Find 10 items."),
+    RAID_LEADER("Raid Leader", "Clear 10 Trials."),
     D_RANK("D-Rank Hunter", "Reach rank D."),
     C_RANK("C-Rank Hunter", "Reach rank C."),
     B_RANK("B-Rank Hunter", "Reach rank B."),
@@ -117,6 +149,7 @@ enum class Title(val displayName: String, val description: String) {
             if (c.productivityMinutes >= 100 * 60) add(SCHOLAR)
             if (c.perfectDays >= 10) add(FLAWLESS)
             if (c.itemsFound >= 10) add(TREASURE_HUNTER)
+            if (c.trialsCleared >= 10) add(RAID_LEADER)
             Rank.entries.filter { it.minLevel <= p.maxLevel }.mapNotNullTo(this) { forRank(it) }
         }
     }

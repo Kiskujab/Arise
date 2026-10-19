@@ -28,6 +28,13 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
+import android.content.Intent
+import android.net.Uri
+import android.provider.Settings
+import com.kiskujab.arise.notify.NotificationHealth
+import com.kiskujab.arise.notify.Scheduler
+import com.kiskujab.arise.notify.Slot
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.style.TextAlign
@@ -161,6 +168,8 @@ fun SettingsScreen(vm: MainViewModel) {
 
         // ------------------------------------------------ notifications
         SystemPanel(title = "NOTIFICATIONS") {
+            NotificationHealthCard(vm)
+            Divider()
             NotifRow("Morning: Daily Quest", notif.morningEnabled, notif.morningMinute,
                 { e -> vm.updateNotifications { it.copy(morningEnabled = e) } },
                 { m -> vm.updateNotifications { it.copy(morningMinute = m) } })
@@ -197,6 +206,9 @@ fun SettingsScreen(vm: MainViewModel) {
                 "Failing the Daily Quest gives a Penalty Quest the next day that tightens only what went wrong. Clearing it gives EXP; failing it costs more.",
                 "If you don't open the app for a day, everything counts as the worst possible result.",
                 "Every 7-day streak earns a Streak Freeze. Rare items drop after cleared quests and at every safe zone.",
+                "Every reported day earns gold: the EXP you kept plus 10 for a cleared quest. Spend it in GEAR on items and equipment.",
+                "Runes and equipment unlock as you play. Loadout changes apply from the next day, and gear does nothing on an absent day.",
+                "3-Day Trials and Weekly Raids give extra EXP and gold. They only reward — failing one costs nothing.",
             )
             lines.forEach { Text("• $it", style = AriseType.small.copy(color = AriseColors.Text), modifier = Modifier.padding(vertical = 3.dp)) }
             Divider(AriseColors.Red)
@@ -232,6 +244,66 @@ fun SettingsScreen(vm: MainViewModel) {
             }
         }
         Spacer(Modifier.height(8.dp))
+    }
+}
+
+/** Shows what could stop notifications from arriving, with shortcuts to fix it. */
+@Composable
+private fun NotificationHealthCard(vm: MainViewModel) {
+    val context = LocalContext.current
+    val now by vm.now.collectAsStateWithLifecycle()
+    val notif by vm.notificationSettings.collectAsStateWithLifecycle()
+    val health = remember(now.second / 3, now.minute) { vm.notificationHealth() }
+    fun open(intent: Intent) {
+        try {
+            context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (_: Exception) {
+            context.startActivity(
+                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+            )
+        }
+    }
+    HealthRow("Notifications allowed", health.notificationsAllowed, required = true) { open(NotificationHealth.notificationSettings(context)) }
+    HealthRow("Exact alarms (on-time quests)", health.exactAlarms, required = true) { open(NotificationHealth.exactAlarmSettings(context)) }
+    HealthRow("No battery restriction", health.batteryUnrestricted, required = false) { open(NotificationHealth.batterySettings(context)) }
+    if (!health.batteryUnrestricted) {
+        Text(
+            "Recommended: some phones (Samsung, Xiaomi, Huawei…) delay or kill background apps. Allow Arise to run unrestricted.",
+            style = AriseType.small,
+        )
+    }
+    Spacer(Modifier.height(8.dp))
+    val next = Scheduler.nextVisible(now, notif)
+    if (next != null) {
+        val (time, slot) = next
+        val label = when (slot) {
+            Slot.MORNING -> "Daily Quest"
+            Slot.PHONE -> "Phone report reminder"
+            Slot.PING -> "Ping & quote"
+            Slot.EVENING -> "Evening warning"
+            Slot.FINAL -> "Final warning"
+            Slot.MAINTENANCE -> "System check"
+        }
+        val day = if (time.toLocalDate() == now.toLocalDate()) "today" else "tomorrow"
+        Text("Next: $label · $day ${String.format(Locale.US, "%02d:%02d", time.hour, time.minute)}", style = AriseType.small.copy(color = AriseColors.Cyan))
+    }
+    Spacer(Modifier.height(8.dp))
+    SystemButton("SEND TEST NOTIFICATION", onClick = { vm.sendTestNotification() }, modifier = Modifier.fillMaxWidth())
+}
+
+@Composable
+private fun HealthRow(label: String, ok: Boolean, required: Boolean, onFix: () -> Unit) {
+    val color = when {
+        ok -> AriseColors.Cyan
+        required -> AriseColors.Red
+        else -> AriseColors.Gold
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
+        GlowText(if (ok) "✓" else if (required) "✕" else "!", AriseType.bodyBold, color = color, glow = color, modifier = Modifier.width(24.dp))
+        Text(label, style = AriseType.body, modifier = Modifier.weight(1f))
+        if (!ok) {
+            Text("FIX", style = AriseType.label.copy(color = color), modifier = Modifier.clickable(onClick = onFix).padding(horizontal = 10.dp, vertical = 6.dp))
+        }
     }
 }
 

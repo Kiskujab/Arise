@@ -1,6 +1,14 @@
 package com.kiskujab.arise.ui.components
 
 import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.runtime.LaunchedEffect
+import kotlinx.coroutines.launch
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
@@ -187,11 +195,18 @@ fun SystemBar(
             .background(AriseColors.BgElevated)
             .border(1.dp, color.copy(alpha = 0.35f), RoundedCornerShape(height / 2)),
     ) {
+        val shine = rememberInfiniteTransition(label = "shine")
+        val sweep by shine.animateFloat(-0.4f, 1.4f, infiniteRepeatable(tween(2400, easing = LinearEasing)), label = "sweep")
         Box(
             Modifier
                 .fillMaxHeight()
                 .fillMaxWidth(animated)
-                .background(Brush.horizontalGradient(listOf(color.copy(alpha = 0.55f), color, AriseColors.Cyan))),
+                .background(Brush.horizontalGradient(listOf(color.copy(alpha = 0.55f), color, AriseColors.Cyan)))
+                .drawWithContent {
+                    drawContent()
+                    val x = sweep * size.width
+                    drawRect(Brush.horizontalGradient(listOf(Color.Transparent, Color.White.copy(alpha = 0.45f), Color.Transparent), x - 30.dp.toPx(), x + 30.dp.toPx()))
+                },
         )
         if (marker != null) {
             BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -338,7 +353,7 @@ fun SystemCheck(checked: Boolean, onChange: (Boolean) -> Unit, enabled: Boolean 
     }
 }
 
-/** Small status mark: ✓ met, ✕ failed, ○ pending. */
+/** Small status mark: ✓ met, ✕ failed, ○ pending. Completing a quest pops the mark with a ring burst. */
 @Composable
 fun QuestMark(met: Boolean, failed: Boolean = false, modifier: Modifier = Modifier) {
     val (txt, c) = when {
@@ -346,7 +361,31 @@ fun QuestMark(met: Boolean, failed: Boolean = false, modifier: Modifier = Modifi
         failed -> "✕" to AriseColors.Red
         else -> "○" to AriseColors.TextFaint
     }
-    GlowText(txt, AriseType.title, modifier = modifier, color = c, glow = c)
+    val haptics = LocalHapticFeedback.current
+    var previous by remember { mutableStateOf(met) }
+    val scale = remember { Animatable(1f) }
+    val ring = remember { Animatable(0f) }
+    LaunchedEffect(met) {
+        if (met && !previous) {
+            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            launch {
+                scale.snapTo(1.9f)
+                scale.animateTo(1f, spring(dampingRatio = 0.4f, stiffness = 380f))
+            }
+            ring.snapTo(0.01f)
+            ring.animateTo(1f, tween(650))
+        }
+        previous = met
+    }
+    Box(modifier, contentAlignment = Alignment.CenterStart) {
+        val r = ring.value
+        if (r > 0f && r < 1f) {
+            Canvas(Modifier.size(24.dp)) {
+                drawCircle(AriseColors.Cyan.copy(alpha = 1f - r), radius = size.minDimension / 2 * (0.3f + r * 1.5f), style = Stroke(2.dp.toPx()))
+            }
+        }
+        GlowText(txt, AriseType.title, modifier = Modifier.graphicsLayer { scaleX = scale.value; scaleY = scale.value }, color = c, glow = c)
+    }
 }
 
 @Composable

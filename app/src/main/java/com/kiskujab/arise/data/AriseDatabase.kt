@@ -30,6 +30,9 @@ interface AriseDao {
     @Query("SELECT * FROM days WHERE epochDay = :day")
     fun dayFlow(day: Long): Flow<DayEntity?>
 
+    @Query("SELECT * FROM days WHERE epochDay >= :from ORDER BY epochDay")
+    fun daysFromFlow(from: Long): Flow<List<DayEntity>>
+
     @Query("SELECT * FROM days WHERE finalized = 1 ORDER BY epochDay DESC")
     fun finalizedDaysFlow(): Flow<List<DayEntity>>
 

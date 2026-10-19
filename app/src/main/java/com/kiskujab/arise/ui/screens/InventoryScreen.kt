@@ -30,6 +30,8 @@ import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kiskujab.arise.core.ItemType
 import com.kiskujab.arise.core.Rules
+import com.kiskujab.arise.core.Shop
+import com.kiskujab.arise.ui.components.reveal
 import com.kiskujab.arise.ui.MainViewModel
 import com.kiskujab.arise.ui.components.Chip
 import com.kiskujab.arise.ui.components.GlowText
@@ -39,16 +41,17 @@ import com.kiskujab.arise.ui.components.glowBorder
 import com.kiskujab.arise.ui.theme.AriseColors
 import com.kiskujab.arise.ui.theme.AriseType
 
+/** Consumable items: use them, or buy more with gold. */
 @Composable
-fun InventoryScreen(vm: MainViewModel) {
+fun BagTab(vm: MainViewModel) {
     val state by vm.playerState.collectAsStateWithLifecycle()
     val today by vm.today.collectAsStateWithLifecycle()
     var confirm by remember { mutableStateOf<ItemType?>(null) }
 
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        SystemPanel(title = "INVENTORY") {
+        SystemPanel(title = "INVENTORY", modifier = Modifier.reveal(0)) {
             Text(
-                "Items are rare. They drop after cleared Daily Quests, at every safe-zone level and on streak milestones.",
+                "Items drop after cleared Daily Quests, at every safe-zone level, on streak milestones and from Weekly Raids. Most can also be bought with gold.",
                 style = AriseType.small,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth(),
@@ -63,9 +66,15 @@ fun InventoryScreen(vm: MainViewModel) {
                 }
             }
         }
-        for (item in ItemType.entries) {
+        ItemType.entries.forEachIndexed { i, item ->
             val count = state.count(item)
-            ItemCard(item, count, onUse = { confirm = item })
+            val price = Shop.prices[item]
+            ItemCard(
+                item, count, onUse = { confirm = item },
+                price = price, canBuy = price != null && state.gold >= price,
+                onBuy = { vm.buyItem(item) },
+                modifier = Modifier.reveal(i + 1),
+            )
         }
         Spacer(Modifier.height(8.dp))
     }
@@ -93,9 +102,17 @@ fun InventoryScreen(vm: MainViewModel) {
 }
 
 @Composable
-private fun ItemCard(item: ItemType, count: Int, onUse: () -> Unit) {
+private fun ItemCard(
+    item: ItemType,
+    count: Int,
+    onUse: () -> Unit,
+    price: Int?,
+    canBuy: Boolean,
+    onBuy: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val c = Color(item.rarity.color)
-    SystemPanel(accent = if (count > 0) c else AriseColors.TextFaint) {
+    SystemPanel(modifier = modifier, accent = if (count > 0) c else AriseColors.TextFaint) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             ItemGlyph(item, c, count > 0)
             Spacer(Modifier.width(14.dp))
@@ -110,9 +127,13 @@ private fun ItemCard(item: ItemType, count: Int, onUse: () -> Unit) {
                 Text(item.description, style = AriseType.small)
             }
         }
-        if (item.usable && count > 0) {
+        val usable = item.usable && count > 0
+        if (usable || price != null) {
             Spacer(Modifier.height(12.dp))
-            SystemButton(if (item == ItemType.RANDOM_BOX) "OPEN" else "USE TODAY", onClick = onUse, accent = c, modifier = Modifier.align(Alignment.End))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp, Alignment.End), verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
+                if (price != null) SystemButton("BUY · $price G", onClick = onBuy, accent = AriseColors.Gold, enabled = canBuy)
+                if (usable) SystemButton(if (item == ItemType.RANDOM_BOX) "OPEN" else "USE TODAY", onClick = onUse, accent = c)
+            }
         }
     }
 }
