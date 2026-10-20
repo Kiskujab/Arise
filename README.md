@@ -22,7 +22,8 @@ by actually living disciplined days. The System tracks:
 - **Absent = worst.** A day with no report counts as the worst possible result for everything.
 - **Levels can drop.** Every 5th level (5, 10, 15, …) is a safe zone you can never fall below. Losses are multiplied
   by your level (×1.7 at level 15, ×3.95 at level 60), so mistakes hurt more the higher you climb.
-- **Calories are exponential.** +200 kcal is a scratch, +600 hurts, +1000 at level 18 drops you to 15.
+- **A day can cost at most 200 XP**, however bad or unreported it was, so one missed day never wipes out weeks.
+- **Calories are exponential.** +200 kcal is a scratch, +600 hurts, +1000 hits the daily cap.
 - **Penalty Quests are corrective.** Failing the Daily Quest tightens only what went wrong the next day
   (less calories, lower screen limit, more steps…), always within reachable bounds.
 - **Weekday targets.** Every target can differ per day of the week (e.g. 8,000 steps Monday–Friday, 500 on Saturday),

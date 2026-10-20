@@ -56,9 +56,10 @@ class RulesTest {
         assertEquals(1, r.player.streak)
     }
 
-    @Test fun thousandKcalOverAtLevel18DropsToSafeZone15() {
+    @Test fun thousandKcalOverAtLevel18CostsTheDailyCap() {
         val r = Finalizer.finalize(input(perfect.copy(kcal = goals.kcal + 1000)), playerAt(18))
-        assertEquals(15, r.levelAfter)
+        assertEquals(-Rules.MAX_DAILY_LOSS, r.appliedDelta)
+        assertEquals(17, r.levelAfter)
         assertFalse(r.questCleared)
         assertNotNull(r.nextPenalty)
         assertEquals(PenaltyQuest.MAX_KCAL_CUT, r.nextPenalty!!.kcalCut)
@@ -79,16 +80,19 @@ class RulesTest {
     }
 
     @Test fun mistakesCostMoreAtHigherLevels() {
-        val bad = perfect.copy(kcal = goals.kcal + 600, steps = 1000, activeKcal = 0)
+        val bad = perfect.copy(kcal = goals.kcal + 500, steps = 2000, protein = 0)
         val low = Finalizer.finalize(input(bad), playerAt(16))
-        val high = Finalizer.finalize(input(bad), playerAt(62))
-        assertTrue(high.rawDelta < low.rawDelta * 2)
+        val high = Finalizer.finalize(input(bad), playerAt(40))
+        assertTrue("low=${low.rawDelta}", low.rawDelta < 0)
+        assertTrue("high=${high.rawDelta}", high.rawDelta > -Rules.MAX_DAILY_LOSS)
+        assertTrue("low=${low.rawDelta} high=${high.rawDelta}", high.rawDelta < low.rawDelta * 1.5)
     }
 
     @Test fun absentDayRecordsWorstAndFallsToFloor() {
         val r = Finalizer.finalize(input(DayValues(), absent = true), playerAt(18, streak = 4))
         assertEquals(Grade.F, r.grade)
-        assertEquals(15, r.levelAfter)
+        assertEquals(-Rules.MAX_DAILY_LOSS, r.appliedDelta)
+        assertEquals(17, r.levelAfter)
         assertEquals(0, r.player.streak)
         assertTrue(r.events.any { it.type == EventType.ABSENT })
         assertTrue(r.events.any { it.type == EventType.STREAK_BROKEN })
@@ -189,7 +193,7 @@ class RulesTest {
     @Test fun recoveringLostLevelGrantsTitle() {
         var p = playerAt(13)
         p = Finalizer.finalize(input(DayValues(), absent = true), p).player
-        assertEquals(10, p.level)
+        assertEquals(12, p.level)
         assertEquals(13, p.recoveryTarget)
         repeat(40) { p = Finalizer.finalize(input(perfect), p).player }
         assertTrue(Title.RISEN in p.titles)

@@ -46,6 +46,9 @@ object Rules {
     /** Losses grow with level: level 1 → ×1, level 15 → ×1.7, level 60 → ×3.95. */
     fun levelFactor(level: Int): Double = 1.0 + (level - 1) / 20.0
 
+    /** The most XP a single day can take, however bad (or unreported) it was. */
+    const val MAX_DAILY_LOSS = 200
+
     const val VACATION_MULTIPLIER = 0.5
     const val PENALTY_CLEARED_XP = 25
     const val PENALTY_FAILED_XP = 30 // × level factor

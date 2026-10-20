@@ -187,7 +187,7 @@ private fun RulesStep(onNext: () -> Unit) {
         "If you don't report, the worst possible result is recorded for everything.",
         "Failing the Daily Quest brings a Penalty Quest that corrects what went wrong.",
         "Levels can be lost. Every 5th level is a safe zone you can never fall below.",
-        "The higher you climb, the more a mistake costs.",
+        "The higher you climb, the more a mistake costs — but one day can never take more than ${com.kiskujab.arise.core.Rules.MAX_DAILY_LOSS} EXP.",
     )
     Column(Modifier.verticalScroll(rememberScrollState())) {
         SystemPanel(title = "RULES OF THE SYSTEM", accent = AriseColors.Red) {

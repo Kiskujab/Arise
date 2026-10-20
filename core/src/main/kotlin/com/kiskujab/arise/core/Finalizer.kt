@@ -175,6 +175,10 @@ object Finalizer {
 
         var p = player
         var rawDelta = lines.sumOf { it.amount }
+        if (rawDelta < -Rules.MAX_DAILY_LOSS) {
+            lines += XpLine("Daily loss cap", -rawDelta - Rules.MAX_DAILY_LOSS)
+            rawDelta = -Rules.MAX_DAILY_LOSS
+        }
         if (rawDelta < 0 && input.modifiers.newcomer) {
             lines += XpLine("Newcomer's Blessing", -rawDelta)
             rawDelta = 0
