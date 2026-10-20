@@ -17,6 +17,7 @@ import com.kiskujab.arise.core.WeekGoals
 import com.kiskujab.arise.data.DayEntity
 import com.kiskujab.arise.data.DayView
 import com.kiskujab.arise.data.EventEntity
+import com.kiskujab.arise.data.ItemUse
 import com.kiskujab.arise.data.NotificationSettings
 import com.kiskujab.arise.data.PlayerEntity
 import com.kiskujab.arise.data.TimeStatus
@@ -118,7 +119,34 @@ class MainViewModel(private val app: AriseApp) : ViewModel() {
     /** The entry animation to show: every launch, and a longer one on the first open of the day. */
     val intro: StateFlow<Intro?> = _intro.asStateFlow()
 
+    private val _streakBurst = MutableStateFlow<Int?>(null)
+    /** Set when today's first real action extends the login streak, for the flame animation. */
+    val streakBurst: StateFlow<Int?> = _streakBurst.asStateFlow()
+
+    private val _itemFx = MutableStateFlow<ItemUse?>(null)
+    /** An item that was just used, for its activation animation. */
+    val itemFx: StateFlow<ItemUse?> = _itemFx.asStateFlow()
+
+    private val _purchaseFx = MutableStateFlow<Equipment?>(null)
+    val purchaseFx: StateFlow<Equipment?> = _purchaseFx.asStateFlow()
+
+    fun dismissStreakBurst() { _streakBurst.value = null }
+    fun dismissItemFx() { _itemFx.value = null }
+    fun dismissPurchaseFx() { _purchaseFx.value = null }
+
     init {
+        viewModelScope.launch {
+            // Watch the login streak; the first action of a day lights the flame.
+            var known: Long? = null
+            playerState.collect { s ->
+                val last = s.activity.lastDay
+                val prev = known
+                if (player.value != null) {
+                    if (prev != null && last > prev && last == todayEpochNow()) _streakBurst.value = s.activity.current
+                    known = last
+                }
+            }
+        }
         viewModelScope.launch {
             val p = dao.player()
             val (status, _) = repo.process()
@@ -171,7 +199,7 @@ class MainViewModel(private val app: AriseApp) : ViewModel() {
     }
 
     fun buyEquipment(e: Equipment) = viewModelScope.launch {
-        repo.buyEquipment(e).onSuccess { _messages.tryEmit("[SYSTEM] $it") }.onFailure { _messages.tryEmit(it.message ?: "Failed") }
+        repo.buyEquipment(e).onSuccess { _purchaseFx.value = e }.onFailure { _messages.tryEmit(it.message ?: "Failed") }
     }
 
     fun buyItem(item: ItemType) = viewModelScope.launch {
@@ -219,7 +247,7 @@ class MainViewModel(private val app: AriseApp) : ViewModel() {
 
     fun useItem(item: ItemType) {
         viewModelScope.launch {
-            repo.useItem(item).onFailure { _messages.tryEmit(it.message ?: "Failed") }
+            repo.useItem(item).onSuccess { _itemFx.value = it }.onFailure { _messages.tryEmit(it.message ?: "Failed") }
         }
     }
 

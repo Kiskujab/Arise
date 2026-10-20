@@ -60,6 +60,19 @@ class SettingsStore(context: Context) {
             state.edit().putLong("lastIntroDay", value).apply()
         }
 
+    /** Recently sent ping kinds (oldest first) and line keys, so pings don't repeat. */
+    var recentPingKinds: List<String>
+        get() = state.getString("pingKinds", "")!!.split(',').filter { it.isNotBlank() }
+        set(value) {
+            state.edit().putString("pingKinds", value.takeLast(6).joinToString(",")).apply()
+        }
+
+    var recentPingKeys: List<String>
+        get() = state.getString("pingKeys", "")!!.split('|').filter { it.isNotBlank() }
+        set(value) {
+            state.edit().putString("pingKeys", value.takeLast(24).joinToString("|")).apply()
+        }
+
     fun update(transform: (NotificationSettings) -> NotificationSettings) {
         val n = transform(_notifications.value)
         prefs.edit()

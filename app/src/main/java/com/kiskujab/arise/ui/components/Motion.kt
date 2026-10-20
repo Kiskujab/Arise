@@ -61,6 +61,20 @@ fun Modifier.reveal(index: Int = 0, step: Long = 70L): Modifier = composed {
     }
 }
 
+/** A dialog window unfolding: tilts up from flat and scales in with a little overshoot. */
+fun Modifier.popIn(): Modifier = composed {
+    val anim = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { anim.animateTo(1f, androidx.compose.animation.core.spring(dampingRatio = 0.6f, stiffness = 260f)) }
+    graphicsLayer {
+        val s = 0.8f + 0.2f * anim.value
+        scaleX = s
+        scaleY = s
+        alpha = anim.value.coerceIn(0f, 1f)
+        rotationX = (1f - anim.value) * 35f
+        cameraDistance = 12f * density
+    }
+}
+
 /**
  * System text that types itself out. The full text is laid out from the start (the rest is
  * invisible) so centered lines don't jump around.

@@ -1,5 +1,12 @@
 package com.kiskujab.arise.ui.screens
 
+import com.kiskujab.arise.ui.components.reveal
+import com.kiskujab.arise.ui.components.ManaCore
+import com.kiskujab.arise.ui.components.HexSigil
+import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -81,8 +88,19 @@ fun SettingsScreen(vm: MainViewModel) {
     val fmtDate = DateTimeFormatter.ofPattern("MMM d", Locale.ENGLISH)
 
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.reveal(0)) {
+            Box(Modifier.size(64.dp), contentAlignment = Alignment.Center) {
+                HexSigil(1f, AriseColors.Blue, Modifier.fillMaxSize())
+                ManaCore(56.dp, AriseColors.Cyan, energy = 0.7f)
+            }
+            Spacer(Modifier.width(12.dp))
+            Column {
+                GlowText("SYSTEM", AriseType.title.copy(fontSize = 22.sp, letterSpacing = 6.sp))
+                Text("Configure the System. New goals always apply from tomorrow.", style = AriseType.small)
+            }
+        }
         // ------------------------------------------------ player
-        SystemPanel(title = "PLAYER") {
+        SystemPanel(title = "PLAYER", modifier = Modifier.reveal(1)) {
             var name by remember(p.name) { mutableStateOf(p.name) }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 BasicTextField(

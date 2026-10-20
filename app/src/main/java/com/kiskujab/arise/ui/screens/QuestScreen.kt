@@ -40,6 +40,8 @@ import com.kiskujab.arise.ui.MainViewModel
 import com.kiskujab.arise.ui.components.Chip
 import com.kiskujab.arise.ui.components.Divider
 import com.kiskujab.arise.ui.components.GlowText
+import com.kiskujab.arise.ui.components.HoldButton
+import com.kiskujab.arise.ui.components.QuestCrystal
 import com.kiskujab.arise.ui.components.QuestMark
 import com.kiskujab.arise.ui.components.SystemButton
 import com.kiskujab.arise.ui.components.SystemCheck
@@ -75,6 +77,7 @@ fun QuestScreen(vm: MainViewModel) {
 
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SystemPanel(title = "DAILY QUEST", modifier = Modifier.reveal(0)) {
+            QuestCrystal(t.doneCount, t.questCount, 110.dp, Modifier.align(Alignment.CenterHorizontally), color = if (t.penalty != null) AriseColors.Red else AriseColors.Cyan)
             GlowText("Preparations to Become Powerful", AriseType.title, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
             Spacer(Modifier.height(4.dp))
             Text(
@@ -274,7 +277,7 @@ private fun YesterdayPanel(y: DayView, now: java.time.LocalDateTime, onEdit: ((D
             style = AriseType.small.copy(color = if (y.score.questCleared) AriseColors.Cyan else AriseColors.TextDim),
         )
         Spacer(Modifier.height(12.dp))
-        SystemButton("SEAL YESTERDAY", onClick = onSeal, accent = AriseColors.Gold, modifier = Modifier.align(Alignment.CenterHorizontally))
+        HoldButton("SEAL YESTERDAY", onComplete = onSeal, accent = AriseColors.Gold, modifier = Modifier.align(Alignment.CenterHorizontally))
     }
 }
 

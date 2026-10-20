@@ -2,7 +2,16 @@ package com.kiskujab.arise.notify
 
 import com.kiskujab.arise.AriseApp
 import com.kiskujab.arise.core.FinalizeResult
+import com.kiskujab.arise.core.Equipment
+import com.kiskujab.arise.core.Ping
+import com.kiskujab.arise.core.PingContext
+import com.kiskujab.arise.core.PingKind
+import com.kiskujab.arise.core.Pings
+import com.kiskujab.arise.core.PlayerState
+import com.kiskujab.arise.core.TrialState
 import com.kiskujab.arise.data.DayView
+import com.kiskujab.arise.data.TrialBoard
+import kotlinx.coroutines.flow.first
 import com.kiskujab.arise.data.TimeStatus
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -88,7 +97,6 @@ object SystemTick {
 
     private suspend fun notifyFor(app: AriseApp, slot: Slot, today: DayView, lastFinalizedDay: Long) {
         val done = today.score.questCleared
-        val remaining = today.remaining.joinToString(", ") { it.label }
         when (slot) {
             Slot.MORNING -> {
                 val lines = buildList {
@@ -112,23 +120,82 @@ object SystemTick {
                 }
             }
             Slot.PING -> {
-                val title = if (done) "[SYSTEM] Daily Quest complete" else "[SYSTEM] ${today.doneCount}/${today.questCount} quests complete"
-                Notifier.post(app, Notifier.ID_PING, Notifier.CHANNEL_SYSTEM, title, Quotes.random())
+                val ping = composePing(app, today)
+                app.settings.recentPingKinds = app.settings.recentPingKinds + ping.kind.name
+                app.settings.recentPingKeys = app.settings.recentPingKeys + ping.key
+                Notifier.post(app, Notifier.ID_PING, Notifier.CHANNEL_SYSTEM, ping.title, ping.text)
             }
             Slot.EVENING -> if (!done) {
-                Notifier.post(
-                    app, Notifier.ID_EVENING, Notifier.CHANNEL_QUESTS, "[SYSTEM] Warning: quests incomplete",
-                    "Remaining: $remaining.\nFailing the Daily Quest will result in a penalty.",
-                )
+                val empty = unlogged(today)
+                val (title, intro) = listOf(
+                    "[SYSTEM] Report window open" to "Time to log the day.",
+                    "[SYSTEM] Evening report" to "The day is nearly done — record it.",
+                    "[SYSTEM] Debrief requested" to "The System awaits your report.",
+                ).random()
+                val body = buildString {
+                    append(intro)
+                    append(" Copy today's numbers from Yazio and fill in the rest.")
+                    if (empty.isNotEmpty()) append("\nStill empty: ").append(empty.joinToString(", "))
+                    append("\nPhone usage can wait until 12:00 tomorrow.")
+                }
+                Notifier.post(app, Notifier.ID_EVENING, Notifier.CHANNEL_QUESTS, title, body)
             }
             Slot.FINAL -> if (!done) {
-                Notifier.post(
-                    app, Notifier.ID_FINAL, Notifier.CHANNEL_QUESTS, "[SYSTEM] The day locks at midnight",
-                    "Remaining: $remaining.\nAfter midnight, entries can no longer be changed.",
-                )
+                val empty = unlogged(today)
+                val body = buildString {
+                    append("After midnight entries can't be changed, and anything missing counts as the worst result.")
+                    if (empty.isNotEmpty()) append("\nStill empty: ").append(empty.joinToString(", "))
+                    else append("\nEverything is logged — check that the numbers are final.")
+                }
+                Notifier.post(app, Notifier.ID_FINAL, Notifier.CHANNEL_QUESTS, "[SYSTEM] The day locks at midnight", body)
             }
             Slot.MAINTENANCE -> Unit
         }
+    }
+
+    /** Day entries that haven't been filled in (phone usage is left out: it's due tomorrow). */
+    private fun unlogged(t: DayView): List<String> = buildList {
+        val r = t.record
+        val g = t.goals
+        if (r.kcal == null) add("calories")
+        if (r.protein == null) add("protein")
+        if (r.steps == null && g.steps > 0) add("steps")
+        if (r.bandHours == null && g.bandHours > 0) add("rubber bands")
+        if ((r.brushCount ?: 0) == 0 && g.brushCount > 0) add("brushing")
+        if (r.skincare != true && !t.vacation) add("skincare")
+    }
+
+    private suspend fun composePing(app: AriseApp, today: DayView): Ping {
+        val repo = app.repository
+        val p = repo.dao.player()
+        val s = p?.state ?: PlayerState()
+        val day = today.epochDay
+        val trials = if (p == null) emptyList() else runCatching {
+            TrialBoard.build(
+                day, p, repo.dao.daysFromFlow(day - 7).first().associateBy { it.epochDay },
+                repo.dao.goalsFlow().first(), repo.dao.customCriteria(), repo.dao.vacations(),
+            ).filter { it.progress.state == TrialState.ACTIVE || it.progress.state == TrialState.SECURED }
+                .map { Triple(it.trial.kind.title, it.trial.span.label, it.daysLeft) }
+        }.getOrDefault(emptyList())
+        val ctx = PingContext(
+            hour = LocalDateTime.now().hour,
+            level = s.level,
+            xp = s.xp,
+            questStreak = s.streak,
+            loginStreak = s.activity.shown(day),
+            loginAtRisk = s.activity.atRisk(day),
+            activeToday = s.activity.activeOn(day),
+            gold = s.gold,
+            armory = Equipment.entries.filter { it !in s.equipment && it.unlock.isMet(s) }.sortedBy { it.price }.map { it.displayName to it.price },
+            trials = trials,
+            penalty = today.penalty?.describe(today.customs) ?: emptyList(),
+            wearsBands = today.goals.bandHours > 0,
+            skincare = !today.vacation,
+            walks = today.goals.steps > 0,
+            vacation = today.vacation,
+        )
+        val kinds = app.settings.recentPingKinds.mapNotNull { runCatching { PingKind.valueOf(it) }.getOrNull() }
+        return Pings.compose(ctx, kinds, app.settings.recentPingKeys.toSet())
     }
 
     private fun signed(n: Int) = if (n >= 0) "+$n" else "$n"

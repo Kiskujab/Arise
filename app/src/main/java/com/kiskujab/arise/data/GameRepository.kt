@@ -32,6 +32,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.random.Random
 
+/** What using an item did; [obtained] is the content of an opened Random Box. */
+data class ItemUse(val item: ItemType, val message: String, val obtained: ItemType? = null)
+
 sealed interface TimeStatus {
     data object Ok : TimeStatus
     /** The device clock is earlier than a time the app has already seen. */
@@ -101,7 +104,15 @@ class GameRepository(private val db: AriseDatabase) {
         val p = dao.player() ?: return@withLock null
         if (epochDay != p.lastFinalizedDay + 1) return@withLock null
         if (!DayClock.canSeal(LocalDate.ofEpochDay(epochDay), now())) return@withLock null
-        finalizeLocked(epochDay)
+        finalizeLocked(epochDay).also { if (it != null) markActiveLocked() }
+    }
+
+    /** Counts today towards the login streak. Call inside the lock after a real change. */
+    private suspend fun markActiveLocked() {
+        val p = dao.player() ?: return
+        val s = p.state
+        val a = s.activity.mark(today())
+        if (a != s.activity) dao.upsertPlayer(p.copy(stateJson = Codec.encodePlayer(s.copy(activity = a))))
     }
 
     private suspend fun finalizeLocked(epochDay: Long): FinalizeResult? = db.withTransaction {
@@ -206,14 +217,18 @@ class GameRepository(private val db: AriseDatabase) {
             DayClock.canEditPhone(day, now) -> current.copy(screenMinutes = edited.screenMinutes, distractionPct = edited.distractionPct)
             else -> return@withLock false
         }
-        dao.upsertDay(allowed.copy(epochDay = epochDay, finalized = false))
+        val saved = allowed.copy(epochDay = epochDay, finalized = false)
+        if (saved != current) {
+            dao.upsertDay(saved)
+            markActiveLocked()
+        }
         true
     }
 
     // ---------------------------------------------------------------- items
 
     /** Uses an item for today. Returns a System message, or an error. */
-    suspend fun useItem(item: ItemType): Result<String> = mutex.withLock {
+    suspend fun useItem(item: ItemType): Result<ItemUse> = mutex.withLock {
         val p = dao.player() ?: return@withLock Result.failure(IllegalStateException("No player"))
         val state = p.state
         if (state.count(item) <= 0) return@withLock Result.failure(IllegalStateException("You don't have this item."))
@@ -221,6 +236,7 @@ class GameRepository(private val db: AriseDatabase) {
         val day = dao.day(today) ?: DayEntity(today)
         var newState = state.withItem(item, -1)
         val message: String
+        var obtained: ItemType? = null
         when (item) {
             ItemType.XP_BOOSTER -> {
                 if (day.booster) return@withLock Result.failure(IllegalStateException("An XP Booster is already active today."))
@@ -241,6 +257,7 @@ class GameRepository(private val db: AriseDatabase) {
             }
             ItemType.RANDOM_BOX -> {
                 val got = ItemType.roll(Random.Default, exclude = setOf(ItemType.RANDOM_BOX))
+                obtained = got
                 newState = newState.withItem(got, 1)
                 newState = newState.copy(counters = newState.counters.copy(itemsFound = newState.counters.itemsFound + 1))
                 message = "The box opens… You obtained: ${got.displayName} [${got.rarity.label}]"
@@ -255,7 +272,8 @@ class GameRepository(private val db: AriseDatabase) {
         for (t in earned) {
             dao.insertEvent(EventEntity(timestamp = millis, epochDay = today, type = EventType.TITLE.name, title = "Title Acquired: ${t.displayName}", message = t.description))
         }
-        Result.success(message)
+        markActiveLocked()
+        Result.success(ItemUse(item, message, obtained))
     }
 
     // ---------------------------------------------------------------- gear
@@ -266,6 +284,7 @@ class GameRepository(private val db: AriseDatabase) {
         val s = p.state
         val clean = l.effective(s)
         dao.upsertPlayer(p.copy(stateJson = Codec.encodePlayer(s.withLoadout(today() + 1, clean))))
+        markActiveLocked()
         Result.success("Loadout saved. It takes effect tomorrow.")
     }
 
@@ -280,6 +299,7 @@ class GameRepository(private val db: AriseDatabase) {
         dao.upsertPlayer(p.copy(stateJson = Codec.encodePlayer(s.copy(gold = s.gold - e.price, equipment = s.equipment + e))))
         val msg = "${e.displayName} acquired. Equip it in your loadout."
         dao.insertEvent(EventEntity(timestamp = System.currentTimeMillis(), epochDay = today(), type = EventType.GEAR.name, title = "Purchased: ${e.displayName}", message = msg, seen = true))
+        markActiveLocked()
         Result.success(msg)
     }
 
@@ -295,6 +315,7 @@ class GameRepository(private val db: AriseDatabase) {
         dao.upsertPlayer(p.copy(stateJson = Codec.encodePlayer(s.copy(gold = s.gold - price).withItem(item, 1))))
         val msg = "${item.displayName} added to your inventory."
         dao.insertEvent(EventEntity(timestamp = System.currentTimeMillis(), epochDay = today(), type = EventType.GEAR.name, title = "Purchased: ${item.displayName}", message = msg, seen = true))
+        markActiveLocked()
         Result.success(msg)
     }
 

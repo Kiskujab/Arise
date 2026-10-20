@@ -37,6 +37,13 @@ Grandmaster (100) → Challenger (110). Max level 120.
 Items drop rarely: Streak Freeze (also every 7-day streak), XP Booster, Random Box (also at every safe zone), Penalty
 Shield and the legendary Skip Day Ticket.
 
+## Login streak
+
+The STATUS screen opens with the **login streak**: days in a row on which you actually did something in Arise
+(reported a value, used an item, changed gear, sealed a day). Just opening the app doesn't count. The flame dims when
+the streak is at risk and changes colour at 7, 30 and 100 days. The quest streak (cleared Daily Quests) and Streak
+Freezes sit right under it.
+
 ## Gold, runes and equipment
 
 - Every reported day earns **gold**: the XP you kept, plus 10 for a cleared Daily Quest. Absent days earn nothing.
@@ -58,8 +65,21 @@ Shield and the legendary Skip Day Ticket.
 
 Notifications fire from exact alarms (Doze-safe) and are re-armed after reboots, app updates and clock or time zone
 changes. An hourly check delivers a missed morning, evening or final notification late instead of never.
+Daytime pings rotate between quotes, System lore, small nudges (water, posture, rubber bands, dinner planning),
+progress facts, streak and trial reminders and Armory tips, avoiding the last kinds and lines sent. They never report
+quest counts mid-day, since most values can only be logged in the evening; the evening and final notifications list
+what is still empty instead.
 SYSTEM → Notifications shows whether anything (permission, exact alarms, battery restrictions) could block them and can
 send a test notification.
+
+## Motion
+
+Launch assembles the emblem from its flying pieces before the hunter profile is revealed; the first open of the day
+then delivers the Daily Quest. Tabs swing like the faces of a cube with a light sweep. Level and rank changes play a
+full-screen sequence (implosion, flash, shake, slam, rolling level counter; rank-ups shatter the old emblem and drop
+the new one in on a pillar of light; losses glitch in red). Opening a Random Box, using an item and buying gear have
+their own reveals. Panels carry a running edge light, cards tilt under the finger, and irreversible actions such as
+sealing a day are hold-to-confirm.
 
 ## Install
 

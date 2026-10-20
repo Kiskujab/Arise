@@ -1,5 +1,13 @@
 package com.kiskujab.arise.ui.screens
 
+import com.kiskujab.arise.ui.components.popIn
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,7 +34,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -39,7 +52,13 @@ import com.kiskujab.arise.core.Rules
 import com.kiskujab.arise.core.Stat
 import com.kiskujab.arise.core.Title
 import com.kiskujab.arise.ui.MainViewModel
+import com.kiskujab.arise.ui.components.AriseLogo
 import com.kiskujab.arise.ui.components.Chip
+import com.kiskujab.arise.ui.components.ManaCore
+import com.kiskujab.arise.ui.components.QuestCrystal
+import com.kiskujab.arise.ui.components.RadarChart
+import com.kiskujab.arise.ui.components.SpinningCoin
+import com.kiskujab.arise.ui.components.tilt3d
 import com.kiskujab.arise.ui.components.CountUpText
 import com.kiskujab.arise.ui.components.RankEmblem
 import com.kiskujab.arise.ui.components.reveal
@@ -75,12 +94,16 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
         Modifier.verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        val todayEpoch = now.toLocalDate().toEpochDay()
         Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-            Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.size(52.dp))
-            GlowText("ARISE", AriseType.title.copy(fontSize = 24.sp, letterSpacing = 8.sp))
+            LivingLogo(Modifier.size(52.dp))
+            GlowText("ARISE", AriseType.title.copy(fontSize = 24.sp, letterSpacing = 8.sp), modifier = Modifier.weight(1f))
+            StreakChip(state.activity.shown(todayEpoch), state.activity.activeOn(todayEpoch))
         }
 
-        SystemPanel(title = "STATUS", modifier = Modifier.reveal(0)) {
+        StreakHero(state, todayEpoch, Modifier.reveal(0))
+
+        SystemPanel(title = "STATUS", modifier = Modifier.reveal(1).tilt3d(4f)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     InfoLine("NAME", p.name)
@@ -90,9 +113,13 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
                         Text("  ▾", style = AriseType.label.copy(color = AriseColors.Blue))
                     }
                 }
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    CountUpText(level.toLong(), AriseType.display.copy(fontSize = 56.sp), durationMillis = 700)
-                    Text("LEVEL", style = AriseType.header)
+                Box(Modifier.size(124.dp), contentAlignment = Alignment.Center) {
+                    ManaCore(124.dp, rankColor.copy(alpha = 1f), energy = 0.55f + 0.45f * progress)
+                    XpRing(progress, rankColor, Modifier.size(118.dp))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        CountUpText(level.toLong(), AriseType.display.copy(fontSize = 44.sp), durationMillis = 700, glow = rankColor)
+                        Text("LEVEL", style = AriseType.header.copy(fontSize = 10.sp))
+                    }
                 }
             }
             Divider()
@@ -105,7 +132,11 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
                 }
                 Column(horizontalAlignment = Alignment.End) {
                     Text("GOLD", style = AriseType.label)
-                    CountUpText(state.gold, AriseType.number.copy(color = AriseColors.Gold), durationMillis = 700, glow = AriseColors.Gold, suffix = " G")
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        SpinningCoin(18.dp)
+                        Spacer(Modifier.width(6.dp))
+                        CountUpText(state.gold, AriseType.number.copy(color = AriseColors.Gold), durationMillis = 700, glow = AriseColors.Gold, suffix = " G")
+                    }
                 }
             }
             Spacer(Modifier.height(14.dp))
@@ -133,14 +164,21 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
         if (t != null) {
             val midnight = now.toLocalDate().plusDays(1).atStartOfDay()
             val accent = if (t.penalty != null) AriseColors.Red else AriseColors.Blue
-            SystemPanel(title = if (t.penalty != null) "PENALTY ACTIVE" else "DAILY QUEST", accent = accent, modifier = Modifier.reveal(1)) {
+            SystemPanel(title = if (t.penalty != null) "PENALTY ACTIVE" else "DAILY QUEST", accent = accent, modifier = Modifier.reveal(2).tilt3d(4f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    QuestCrystal(t.doneCount, t.questCount, 72.dp, color = if (t.penalty != null) AriseColors.Red else AriseColors.Cyan)
+                    Spacer(Modifier.width(12.dp))
                     Column(Modifier.weight(1f)) {
                         Text(
-                            if (t.score.questCleared) "All quests complete" else "${t.doneCount} / ${t.questCount} complete",
+                            when {
+                                t.score.questCleared -> "All quests complete"
+                                t.record.isEmpty -> "Log your day tonight"
+                                else -> "${t.doneCount} of ${t.questCount} met so far"
+                            },
                             style = AriseType.bodyBold.copy(color = if (t.score.questCleared) AriseColors.Cyan else AriseColors.Text),
                         )
                         Text("Locks in ${countdown(now, midnight)}", style = AriseType.small)
+                        Text("Each lit facet is a quest that's met.", style = AriseType.small.copy(color = AriseColors.TextFaint, fontSize = 12.sp))
                     }
                     if (t.vacation) Chip("VACATION", AriseColors.Purple)
                 }
@@ -153,7 +191,7 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
 
         val trials by vm.trials.collectAsStateWithLifecycle()
         if (trials.isNotEmpty()) {
-            SystemPanel(title = "TRIALS", accent = AriseColors.Gold, modifier = Modifier.reveal(2).clickable(onClick = onOpenQuests)) {
+            SystemPanel(title = "TRIALS", accent = AriseColors.Gold, modifier = Modifier.reveal(3).clickable(onClick = onOpenQuests)) {
                 for (c in trials) {
                     Row(Modifier.fillMaxWidth().padding(vertical = 3.dp), verticalAlignment = Alignment.CenterVertically) {
                         Column(Modifier.weight(1f)) {
@@ -168,7 +206,12 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
             }
         }
 
-        SystemPanel(title = "STATS", modifier = Modifier.reveal(3)) {
+        SystemPanel(title = "STATS", modifier = Modifier.reveal(4)) {
+            RadarChart(
+                Stat.entries.map { it.name to state.statValue(it) },
+                Modifier.fillMaxWidth().height(250.dp),
+            )
+            Divider()
             val stats = Stat.entries
             for (row in stats.chunked(2)) {
                 Row(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
@@ -187,9 +230,11 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
 
         val c = state.counters
         val daysSince = (now.toLocalDate().toEpochDay() - p.awakenedEpochDay + 1).coerceAtLeast(1)
-        SystemPanel(title = "RECORDS", modifier = Modifier.reveal(4)) {
-            RecordRow("Current streak", "${state.streak} days", AriseColors.Cyan)
-            RecordRow("Best streak", "${state.bestStreak} days")
+        SystemPanel(title = "RECORDS", modifier = Modifier.reveal(5)) {
+            RecordRow("Quest streak", "${state.streak} days", AriseColors.Cyan)
+            RecordRow("Best quest streak", "${state.bestStreak} days")
+            RecordRow("Login streak", "${state.activity.shown(todayEpoch)} days", AriseColors.Blue)
+            RecordRow("Best login streak", "${state.activity.best} days")
             RecordRow("Streak freezes", "${state.count(com.kiskujab.arise.core.ItemType.STREAK_FREEZE)} / ${Rules.MAX_FREEZES}")
             Divider()
             RecordRow("Days since awakening", daysSince.toString())
@@ -213,7 +258,7 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
     if (showTitles) {
         Dialog(onDismissRequest = { showTitles = false }) {
             Column(Modifier.heightIn(max = 560.dp).verticalScroll(rememberScrollState())) {
-                SystemPanel(title = "TITLES", accent = AriseColors.Gold) {
+                SystemPanel(Modifier.popIn(), title = "TITLES", accent = AriseColors.Gold) {
                     for (title in Title.entries) {
                         val owned = title in state.titles
                         val active = title == activeTitle
@@ -237,6 +282,36 @@ fun StatusScreen(vm: MainViewModel, onOpenQuests: () -> Unit) {
                 }
             }
         }
+    }
+}
+
+/** The header emblem, assembled, with a light sweep every few seconds. */
+@Composable
+private fun LivingLogo(modifier: Modifier) {
+    val t = rememberInfiniteTransition(label = "logo")
+    val cycle by t.animateFloat(0f, 1f, infiniteRepeatable(tween(5200, easing = LinearEasing)), label = "c")
+    val flash = if (cycle > 0.86f) kotlin.math.sin((cycle - 0.86f) / 0.14f * Math.PI.toFloat()) else 0f
+    AriseLogo(1f, modifier, flash = flash * 0.7f)
+}
+
+/** Circular EXP gauge around the mana core. */
+@Composable
+private fun XpRing(progress: Float, color: Color, modifier: Modifier) {
+    val animated by animateFloatAsState(progress.coerceIn(0f, 1f), tween(1200), label = "xpRing")
+    Canvas(modifier) {
+        val sw = 3.dp.toPx()
+        val tl = Offset(sw, sw)
+        val sz = Size(size.width - 2 * sw, size.height - 2 * sw)
+        drawArc(AriseColors.BgElevated, 0f, 360f, false, tl, sz, style = Stroke(sw))
+        drawArc(
+            Brush.sweepGradient(listOf(color.copy(alpha = 0.4f), color, AriseColors.Cyan, color.copy(alpha = 0.4f))),
+            -90f, 360f * animated, false, tl, sz, style = Stroke(sw, cap = StrokeCap.Round),
+        )
+        val a = Math.toRadians(-90.0 + 360.0 * animated)
+        val r = sz.width / 2
+        val head = Offset(center.x + (kotlin.math.cos(a) * r).toFloat(), center.y + (kotlin.math.sin(a) * r).toFloat())
+        drawCircle(Color.White, sw * 0.9f, head)
+        drawCircle(AriseColors.Cyan.copy(alpha = 0.4f), sw * 2.2f, head)
     }
 }
 

@@ -1,5 +1,26 @@
 package com.kiskujab.arise.ui.screens
 
+import com.kiskujab.arise.ui.components.popIn
+import com.kiskujab.arise.ui.components.tilt3d
+import com.kiskujab.arise.ui.components.SpinningCoin
+import com.kiskujab.arise.ui.components.ManaCore
+import com.kiskujab.arise.ui.components.HexSigil
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -92,28 +113,21 @@ fun GearScreen(vm: MainViewModel) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             GlowText("GEAR", AriseType.title, modifier = Modifier.weight(1f))
-            GlowText("◆ ", AriseType.bodyBold.copy(color = AriseColors.Gold), glow = AriseColors.Gold)
+            SpinningCoin(20.dp)
+            Spacer(Modifier.width(8.dp))
             CountUpText(state.gold, AriseType.number.copy(color = AriseColors.Gold), durationMillis = 600, glow = AriseColors.Gold, suffix = " G")
         }
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            for (t in GearTab.entries) {
-                val sel = t == tab
-                val c = if (sel) AriseColors.Cyan else AriseColors.TextFaint
-                Box(
-                    Modifier
-                        .weight(1f)
-                        .border(1.dp, c.copy(alpha = if (sel) 0.9f else 0.4f), RoundedCornerShape(4.dp))
-                        .background(if (sel) AriseColors.Cyan.copy(alpha = 0.12f) else Color.Transparent)
-                        .clickable { tab = t }
-                        .padding(vertical = 8.dp),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text(t.label, style = AriseType.label.copy(color = if (sel) AriseColors.Text else AriseColors.TextDim))
-                }
-            }
-        }
+        GearTabs(tab) { tab = it }
         Box(Modifier.weight(1f)) {
-            AnimatedContent(tab, transitionSpec = { fadeIn() togetherWith fadeOut() }, label = "gearTab") { t ->
+            AnimatedContent(
+                tab,
+                transitionSpec = {
+                    val dir = if (targetState.ordinal > initialState.ordinal) 1 else -1
+                    (fadeIn(tween(380, delayMillis = 80)) + slideInHorizontally(tween(420)) { it / 3 * dir } + scaleIn(tween(420), initialScale = 0.92f)) togetherWith
+                        (fadeOut(tween(260)) + slideOutHorizontally(tween(320)) { -it / 3 * dir } + scaleOut(tween(320), targetScale = 0.92f))
+                },
+                label = "gearTab",
+            ) { t ->
                 when (t) {
                     GearTab.LOADOUT -> LoadoutTab(state, draft, active != saved, onChange = { draft = it }, onBrowse = { tab = it })
                     GearTab.RUNES -> RunesTab(state, draft, onChange = { draft = it })
@@ -137,6 +151,71 @@ fun GearScreen(vm: MainViewModel) {
     }
 }
 
+@Composable
+private fun GearTabs(selected: GearTab, onSelect: (GearTab) -> Unit) {
+    val pos by animateFloatAsState(selected.ordinal.toFloat(), spring(dampingRatio = 0.6f, stiffness = 320f), label = "gearTabPos")
+    BoxWithConstraints(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 10.dp)
+            .height(38.dp)
+            .border(1.dp, AriseColors.Blue.copy(alpha = 0.4f), RoundedCornerShape(4.dp)),
+    ) {
+        val w = maxWidth / GearTab.entries.size
+        Box(
+            Modifier
+                .offset(x = w * pos)
+                .width(w)
+                .fillMaxHeight()
+                .padding(2.dp)
+                .background(Brush.verticalGradient(listOf(AriseColors.Cyan.copy(alpha = 0.28f), AriseColors.BlueDeep.copy(alpha = 0.18f))), RoundedCornerShape(3.dp))
+                .border(1.dp, AriseColors.Cyan, RoundedCornerShape(3.dp)),
+        )
+        Row(Modifier.fillMaxSize()) {
+            for (t in GearTab.entries) {
+                val sel = t == selected
+                Box(
+                    Modifier.weight(1f).fillMaxHeight().clickable(remember { MutableInteractionSource() }, indication = null) { onSelect(t) },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(t.label, style = AriseType.label.copy(color = if (sel) AriseColors.Text else AriseColors.TextDim))
+                }
+            }
+        }
+    }
+}
+
+/** The equipped loadout as an orbit: one light per rune and item circling the hunter's core. */
+@Composable
+private fun LoadoutAltar(draft: Loadout, modifier: Modifier = Modifier) {
+    val t = rememberInfiniteTransition(label = "altar")
+    val spin by t.animateFloat(0f, 360f, infiniteRepeatable(tween(12_000, easing = LinearEasing)), label = "spin")
+    val orbs = buildList {
+        draft.keystone?.let { add(KEYSTONE_COLOR to 1.3f) }
+        draft.minors.forEach { add(MINOR_COLOR to 1f) }
+        draft.items.forEach { add(Color(it.rarity.color) to 1.15f) }
+    }
+    Box(modifier.fillMaxWidth().height(170.dp), contentAlignment = Alignment.Center) {
+        HexSigil(1f, AriseColors.Purple.copy(alpha = 0.6f), Modifier.size(170.dp))
+        ManaCore(110.dp, AriseColors.Cyan, energy = 0.4f + 0.1f * orbs.size)
+        Canvas(Modifier.size(170.dp)) {
+            val c = center
+            val r = size.minDimension / 2 * 0.78f
+            orbs.forEachIndexed { i, (color, k) ->
+                val a = Math.toRadians((spin + i * 360f / orbs.size.coerceAtLeast(1)).toDouble())
+                // A tilted orbit: y squashed so it reads as a ring in 3D.
+                val depth = sin(a).toFloat()
+                val o = Offset(c.x + (cos(a) * r).toFloat(), c.y + depth * r * 0.38f)
+                val sz = (4f + 2f * depth) * k
+                drawCircle(color.copy(alpha = 0.25f), (sz * 2.6f).dp.toPx(), o)
+                drawCircle(color, sz.dp.toPx(), o)
+                drawCircle(Color.White.copy(alpha = 0.7f), (sz * 0.4f).dp.toPx(), o)
+            }
+        }
+        if (orbs.isEmpty()) Text("NO GEAR EQUIPPED", style = AriseType.label.copy(color = AriseColors.TextFaint), modifier = Modifier.align(Alignment.BottomCenter))
+    }
+}
+
 // ------------------------------------------------------------------ loadout
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -144,6 +223,7 @@ fun GearScreen(vm: MainViewModel) {
 private fun LoadoutTab(state: PlayerState, draft: Loadout, pendingSaved: Boolean, onChange: (Loadout) -> Unit, onBrowse: (GearTab) -> Unit) {
     val level = state.level
     Column(Modifier.verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        LoadoutAltar(draft, Modifier.reveal(0))
         if (pendingSaved) {
             SystemPanel(Modifier.reveal(0), accent = AriseColors.Purple) {
                 Text("A new loadout is saved. It becomes active tomorrow; today the previous one still applies.", style = AriseType.small)
@@ -264,7 +344,7 @@ private fun RunesTab(state: PlayerState, draft: Loadout, onChange: (Loadout) -> 
                 RuneSlot.KEYSTONE -> Slots.keystoneOpen(level)
                 RuneSlot.MINOR -> draft.minors.size < Slots.minorSlots(level)
             }
-            SystemPanel(Modifier.reveal(i + 1, 45), accent = if (unlocked) color else AriseColors.TextFaint) {
+            SystemPanel(Modifier.reveal(i + 1, 45).tilt3d(4f), accent = if (unlocked) color else AriseColors.TextFaint) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     RuneGlyph(r.slot == RuneSlot.KEYSTONE, color, unlocked, 44.dp)
                     Spacer(Modifier.width(12.dp))
@@ -334,7 +414,7 @@ private fun ArmoryTab(state: PlayerState, draft: Loadout, onChange: (Loadout) ->
             val owned = e in state.equipment
             val equipped = draft.has(e)
             val color = Color(e.rarity.color)
-            SystemPanel(Modifier.reveal(i + 1, 45), accent = if (unlocked) color else AriseColors.TextFaint) {
+            SystemPanel(Modifier.reveal(i + 1, 45).tilt3d(4f), accent = if (unlocked) color else AriseColors.TextFaint) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     EquipmentGlyph(e, unlocked, 48.dp)
                     Spacer(Modifier.width(12.dp))
@@ -370,7 +450,7 @@ private fun ArmoryTab(state: PlayerState, draft: Loadout, onChange: (Loadout) ->
 
     confirm?.let { e ->
         androidx.compose.ui.window.Dialog(onDismissRequest = { confirm = null }) {
-            SystemPanel(title = "ARMORY", accent = AriseColors.Gold) {
+            SystemPanel(Modifier.popIn(), title = "ARMORY", accent = AriseColors.Gold) {
                 EquipmentGlyph(e, true, 64.dp, Modifier.align(Alignment.CenterHorizontally))
                 Spacer(Modifier.height(10.dp))
                 Text("Buy ${e.displayName} for ${e.price} gold?\n\n${e.description}", style = AriseType.body, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())

@@ -26,6 +26,8 @@ data class PlayerState(
     val knownUnlocks: Set<String> = emptySet(),
     /** Recent trial outcomes by [Trial.key]. */
     val trialResults: Map<String, Boolean> = emptyMap(),
+    /** Days in a row the player did something in the app. */
+    val activity: ActivityStreak = ActivityStreak(),
 ) {
     val level: Int get() = Rules.levelForXp(xp)
     val rank: Rank get() = Rank.forLevel(level)
@@ -60,6 +62,36 @@ data class PlayerState(
 
     companion object {
         const val BASE_STAT = 10
+    }
+}
+
+/**
+ * The login streak: consecutive days on which the player actually did something in the app
+ * (reported a value, used an item, changed gear…). Opening the app alone doesn't count.
+ */
+@Serializable
+data class ActivityStreak(
+    val lastDay: Long = NEVER,
+    val current: Int = 0,
+    val best: Int = 0,
+) {
+    /** Records activity on [day]. Repeats on the same day change nothing. */
+    fun mark(day: Long): ActivityStreak = when {
+        day <= lastDay -> this
+        day == lastDay + 1 -> (current + 1).let { copy(lastDay = day, current = it, best = maxOf(best, it)) }
+        else -> copy(lastDay = day, current = 1, best = maxOf(best, 1))
+    }
+
+    fun activeOn(day: Long): Boolean = lastDay == day
+
+    /** The streak as it stands on [today]: still alive if yesterday was active, but not yet extended. */
+    fun shown(today: Long): Int = if (lastDay >= today - 1) current else 0
+
+    /** True when the streak survives only if the player does something today. */
+    fun atRisk(today: Long): Boolean = lastDay == today - 1 && current > 0
+
+    companion object {
+        const val NEVER = -1_000_000L
     }
 }
 

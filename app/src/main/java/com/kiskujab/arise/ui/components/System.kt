@@ -20,6 +20,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -110,6 +111,7 @@ fun SystemPanel(
         modifier
             .fillMaxWidth()
             .glowBorder(accent)
+            .edgeRunner(accent)
             .clip(RoundedCornerShape(6.dp))
             .background(
                 Brush.verticalGradient(listOf(AriseColors.Panel, Color(0xF0060B16))),
@@ -164,12 +166,42 @@ fun SystemButton(
     enabled: Boolean = true,
 ) {
     val c = if (enabled) accent else AriseColors.TextFaint
+    val haptics = LocalHapticFeedback.current
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val press by animateFloatAsState(if (pressed) 1f else 0f, spring(dampingRatio = 0.45f, stiffness = 700f), label = "press")
+    val shine = rememberInfiniteTransition(label = "btnShine")
+    // Runs past 1 so the sweep pauses between passes.
+    val sweep = shine.animateFloat(-0.6f, 2.6f, infiniteRepeatable(tween(4200, easing = LinearEasing)), label = "sweep")
     Box(
         modifier
-            .glowBorder(c, 4.dp, if (enabled) 1f else 0.4f)
+            .graphicsLayer {
+                val sc = 1f - 0.07f * press
+                scaleX = sc
+                scaleY = sc
+                translationY = 2.dp.toPx() * press
+            }
+            .glowBorder(c, 4.dp, if (enabled) 1f + 0.8f * press else 0.4f)
             .clip(RoundedCornerShape(4.dp))
-            .background(c.copy(alpha = 0.14f))
-            .clickable(enabled = enabled, onClick = onClick)
+            .background(c.copy(alpha = 0.14f + 0.2f * press))
+            .drawWithContent {
+                drawContent()
+                if (enabled) {
+                    val x = sweep.value * size.width
+                    drawRect(
+                        Brush.linearGradient(
+                            listOf(Color.Transparent, Color.White.copy(alpha = 0.28f), Color.Transparent),
+                            start = Offset(x - 40.dp.toPx(), 0f), end = Offset(x, size.height),
+                        ),
+                    )
+                }
+                // Bottom edge, so the button reads as a raised key.
+                drawRect(c.copy(alpha = 0.35f * (1f - press)), Offset(0f, size.height - 2.dp.toPx()), Size(size.width, 2.dp.toPx()))
+            }
+            .clickable(interactionSource = interaction, indication = null, enabled = enabled) {
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                onClick()
+            }
             .padding(horizontal = 22.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center,
     ) {

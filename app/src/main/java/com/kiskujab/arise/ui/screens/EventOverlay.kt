@@ -46,6 +46,9 @@ import com.kiskujab.arise.core.EventType
 import com.kiskujab.arise.data.EventEntity
 import com.kiskujab.arise.ui.MainViewModel
 import com.kiskujab.arise.ui.components.GlowText
+import com.kiskujab.arise.ui.components.TypewriterText
+import androidx.compose.ui.graphics.graphicsLayer
+import kotlinx.coroutines.launch
 import com.kiskujab.arise.ui.components.SystemButton
 import com.kiskujab.arise.ui.components.SystemPanel
 import com.kiskujab.arise.ui.theme.AriseColors
@@ -74,7 +77,7 @@ private fun eventHeader(type: String): String = when (runCatching { EventType.va
     else -> "NOTIFICATION"
 }
 
-/** Shows unseen System messages one by one. Level and rank ups get the full-screen treatment. */
+/** Shows unseen System messages one by one. Level and rank changes get a full-screen cinematic. */
 @Composable
 fun EventOverlay(vm: MainViewModel) {
     val events by vm.unseenEvents.collectAsStateWithLifecycle()
@@ -89,8 +92,8 @@ fun EventOverlay(vm: MainViewModel) {
         ) {
             if (event != null) {
                 val type = runCatching { EventType.valueOf(event.type) }.getOrNull()
-                if (type == EventType.LEVEL_UP || type == EventType.RANK_UP) {
-                    Ascension(event, events.size) { vm.markSeen(event.id) }
+                if (type == EventType.LEVEL_UP || type == EventType.RANK_UP || type == EventType.LEVEL_DOWN || type == EventType.RANK_DOWN) {
+                    LevelSequence(event, events.size) { vm.markSeen(event.id) }
                 } else {
                     SystemMessage(event, events.size) { vm.markSeen(event.id) }
                 }
@@ -103,10 +106,20 @@ fun EventOverlay(vm: MainViewModel) {
 private fun SystemMessage(event: EventEntity, total: Int, onOk: () -> Unit) {
     val accent = eventAccent(event.type)
     val scale = remember(event.id) { Animatable(0.85f) }
-    LaunchedEffect(event.id) { scale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy)) }
-    Column(Modifier.padding(24.dp).scale(scale.value)) {
+    val flip = remember(event.id) { Animatable(-80f) }
+    LaunchedEffect(event.id) {
+        launch { flip.animateTo(0f, spring(dampingRatio = 0.55f, stiffness = 180f)) }
+        scale.animateTo(1f, spring(dampingRatio = Spring.DampingRatioMediumBouncy))
+    }
+    Column(
+        Modifier.padding(24.dp).scale(scale.value).graphicsLayer {
+            rotationX = flip.value
+            cameraDistance = 14f * density
+            alpha = (1f - kotlin.math.abs(flip.value) / 80f).coerceIn(0f, 1f)
+        },
+    ) {
         SystemPanel(title = eventHeader(event.type), accent = accent) {
-            GlowText(event.title, AriseType.title, glow = accent, modifier = Modifier.fillMaxWidth(), textAlign = TextAlign.Center)
+            TypewriterText(event.title, AriseType.title, modifier = Modifier.fillMaxWidth(), charMillis = 22, glow = accent, textAlign = TextAlign.Center)
             Spacer(Modifier.height(12.dp))
             Text(event.message, style = AriseType.body, textAlign = TextAlign.Center, modifier = Modifier.fillMaxWidth())
             Spacer(Modifier.height(18.dp))
@@ -115,55 +128,6 @@ private fun SystemMessage(event: EventEntity, total: Int, onOk: () -> Unit) {
                 Spacer(Modifier.height(8.dp))
                 Text("${total - 1} more message(s)", style = AriseType.small, modifier = Modifier.align(Alignment.CenterHorizontally))
             }
-        }
-    }
-}
-
-@Composable
-private fun Ascension(event: EventEntity, total: Int, onOk: () -> Unit) {
-    val accent = eventAccent(event.type)
-    val haptics = LocalHapticFeedback.current
-    val scale = remember(event.id) { Animatable(3f) }
-    val alpha = remember(event.id) { Animatable(0f) }
-    LaunchedEffect(event.id) {
-        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-        alpha.animateTo(1f, tween(250))
-        scale.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 300f))
-    }
-    val transition = rememberInfiniteTransition(label = "rays")
-    val rotation by transition.animateFloat(0f, 360f, infiniteRepeatable(tween(30_000, easing = LinearEasing)), label = "rot")
-    val pulse by transition.animateFloat(0.7f, 1f, infiniteRepeatable(tween(1200), RepeatMode.Reverse), label = "pulse")
-
-    Box(Modifier.fillMaxSize().clickable(remember { MutableInteractionSource() }, indication = null, onClick = onOk), contentAlignment = Alignment.Center) {
-        Canvas(Modifier.fillMaxSize()) {
-            val c = Offset(size.width / 2, size.height / 2)
-            drawCircle(Brush.radialGradient(listOf(accent.copy(alpha = 0.35f * pulse), Color.Transparent), c, size.minDimension * 0.6f), size.minDimension * 0.6f, c)
-            rotate(rotation, c) {
-                for (i in 0 until 16) {
-                    rotate(i * 22.5f, c) {
-                        drawLine(
-                            Brush.verticalGradient(listOf(accent.copy(alpha = 0.0f), accent.copy(alpha = 0.25f * pulse), accent.copy(alpha = 0f)), c.y - size.maxDimension, c.y),
-                            Offset(c.x, c.y),
-                            Offset(c.x, c.y - size.maxDimension),
-                            strokeWidth = 6.dp.toPx(),
-                        )
-                    }
-                }
-            }
-        }
-        Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
-            GlowText(
-                event.title.uppercase(),
-                AriseType.display.copy(fontSize = 46.sp),
-                glow = accent,
-                modifier = Modifier.scale(scale.value),
-                textAlign = TextAlign.Center,
-                color = AriseColors.Text.copy(alpha = alpha.value),
-            )
-            Spacer(Modifier.height(16.dp))
-            GlowText(event.message, AriseType.title, glow = accent, textAlign = TextAlign.Center, color = AriseColors.Text.copy(alpha = alpha.value))
-            Spacer(Modifier.height(36.dp))
-            Text(if (total > 1) "Tap to continue · ${total - 1} more" else "Tap to continue", style = AriseType.small)
         }
     }
 }

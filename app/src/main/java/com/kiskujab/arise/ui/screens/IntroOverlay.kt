@@ -66,12 +66,14 @@ import com.kiskujab.arise.core.Title
 import com.kiskujab.arise.data.DayView
 import com.kiskujab.arise.ui.Intro
 import com.kiskujab.arise.ui.MainViewModel
+import com.kiskujab.arise.ui.components.AriseLogo
 import com.kiskujab.arise.ui.components.CountUpText
 import com.kiskujab.arise.ui.components.GlowText
 import com.kiskujab.arise.ui.components.LightRays
 import com.kiskujab.arise.ui.components.RankEmblem
 import com.kiskujab.arise.ui.components.Scanlines
 import com.kiskujab.arise.ui.components.Shockwave
+import com.kiskujab.arise.ui.components.SparkFountain
 import com.kiskujab.arise.ui.components.SystemBar
 import com.kiskujab.arise.ui.components.SystemButton
 import com.kiskujab.arise.ui.components.SystemPanel
@@ -151,6 +153,8 @@ private fun ProfileReveal(
     val haptics = LocalHapticFeedback.current
     val gate = remember { Animatable(0f) }
     val logo = remember { Animatable(0f) }
+    val logoFlash = remember { Animatable(0f) }
+    val logoShock = remember { Animatable(0f) }
     val emblemScale = remember { Animatable(0f) }
     val shock = remember { Animatable(0f) }
     var showName by remember { mutableStateOf(false) }
@@ -158,9 +162,19 @@ private fun ProfileReveal(
     var showStats by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
-        launch { gate.animateTo(1f, tween(750, easing = FastOutSlowInEasing)) }
-        launch { logo.animateTo(1f, spring(dampingRatio = 0.55f, stiffness = 220f)) }
-        delay(650)
+        // The emblem's pieces fly in from every side and lock together.
+        launch { gate.animateTo(1f, tween(1250, easing = FastOutSlowInEasing)) }
+        launch {
+            for (i in 0 until 5) {
+                delay(190)
+                haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+            }
+        }
+        logo.animateTo(1f, tween(1250, easing = LinearEasing))
+        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+        launch { logoFlash.snapTo(1f); logoFlash.animateTo(0f, tween(700)) }
+        launch { logoShock.animateTo(1f, tween(800)) }
+        delay(250)
         showName = true
         delay(550)
         showRank = true
@@ -198,6 +212,7 @@ private fun ProfileReveal(
         TypewriterText("[SYSTEM] Player identified.", AriseType.label.copy(color = AriseColors.Blue), charMillis = 18)
         Spacer(Modifier.height(18.dp))
         Box(Modifier.size(150.dp), contentAlignment = Alignment.Center) {
+            Shockwave(logoShock.value, AriseColors.Cyan, Modifier.size(300.dp))
             Canvas(Modifier.fillMaxSize()) {
                 val sw = 3.dp.toPx()
                 val sweep = 360f * gate.value
@@ -211,14 +226,12 @@ private fun ProfileReveal(
                     size.minDimension / 2,
                 )
             }
-            Image(
-                painterResource(R.drawable.ic_launcher_foreground),
-                contentDescription = null,
-                modifier = Modifier.size(170.dp).graphicsLayer {
-                    scaleX = 0.6f + 0.4f * logo.value
-                    scaleY = 0.6f + 0.4f * logo.value
-                    alpha = logo.value.coerceIn(0f, 1f)
+            AriseLogo(
+                logo.value, Modifier.size(170.dp).graphicsLayer {
+                    val s = 1f + 0.08f * logoFlash.value
+                    scaleX = s; scaleY = s
                 },
+                flash = logoFlash.value,
             )
         }
         Spacer(Modifier.height(14.dp))
@@ -403,6 +416,8 @@ fun QuestCompleteBurst(onDone: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         LightRays(AriseColors.Cyan, Modifier.fillMaxSize())
+        SparkFountain(AriseColors.Cyan, Modifier.fillMaxSize(), intensity = alpha.value, origin = 0.5f)
+        Shockwave(((3f - scale.value) / 2f).coerceIn(0f, 0.999f), AriseColors.Cyan, Modifier.size(360.dp))
         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(24.dp)) {
             GlowText(
                 "QUEST\nCOMPLETE",

@@ -1,5 +1,9 @@
 package com.kiskujab.arise.ui.screens
 
+import com.kiskujab.arise.ui.components.popIn
+import com.kiskujab.arise.ui.components.tilt3d
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -81,7 +85,7 @@ fun BagTab(vm: MainViewModel) {
 
     confirm?.let { item ->
         Dialog(onDismissRequest = { confirm = null }) {
-            SystemPanel(title = "CONFIRM", accent = Color(item.rarity.color)) {
+            SystemPanel(Modifier.popIn(), title = "CONFIRM", accent = Color(item.rarity.color)) {
                 Text(
                     when (item) {
                         ItemType.RANDOM_BOX -> "Open the Random Box?"
@@ -112,9 +116,15 @@ private fun ItemCard(
     modifier: Modifier = Modifier,
 ) {
     val c = Color(item.rarity.color)
-    SystemPanel(modifier = modifier, accent = if (count > 0) c else AriseColors.TextFaint) {
+    val bob = androidx.compose.animation.core.rememberInfiniteTransition(label = "bob")
+    val lift by bob.animateFloat(
+        -1f, 1f,
+        androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(1600 + item.ordinal * 230), androidx.compose.animation.core.RepeatMode.Reverse),
+        label = "lift",
+    )
+    SystemPanel(modifier = modifier.tilt3d(5f), accent = if (count > 0) c else AriseColors.TextFaint) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            ItemGlyph(item, c, count > 0)
+            ItemGlyph(item, c, count > 0, modifier = Modifier.graphicsLayer { translationY = if (count > 0) lift * 3.dp.toPx() else 0f })
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
@@ -140,12 +150,13 @@ private fun ItemCard(
 
 /** Simple vector glyphs, one per item. */
 @Composable
-private fun ItemGlyph(item: ItemType, color: Color, active: Boolean) {
+fun ItemGlyph(item: ItemType, color: Color, active: Boolean, glyphSize: androidx.compose.ui.unit.Dp = 48.dp, modifier: Modifier = Modifier) {
     val c = if (active) color else AriseColors.TextFaint
-    Canvas(Modifier.size(48.dp).glowBorder(c, 6.dp, if (active) 0.8f else 0.3f).padding(10.dp)) {
+    val strokeScale = glyphSize.value / 48f
+    Canvas(modifier.size(glyphSize).glowBorder(c, glyphSize / 8, if (active) 0.8f else 0.3f).padding(glyphSize * 0.21f)) {
         val w = size.width
         val h = size.height
-        val stroke = Stroke(width = 2.5.dp.toPx())
+        val stroke = Stroke(width = 2.5.dp.toPx() * strokeScale)
         when (item) {
             ItemType.STREAK_FREEZE -> {
                 for (i in 0 until 3) {
